@@ -1,0 +1,14 @@
+# .gitignore — JAMAIS commiter ces fichiers
+.env
+venv/
+__pycache__/
+*.pyc
+*.pyo
+db.sqlite3
+media/
+staticfiles/
+node_modules/
+dist/
+.DS_Store
+*.log
+
