@@ -1,6 +1,6 @@
 # ZAY Digital World
 # Backend – Journal de développement
-
+Le 30/06/2026
 ## 1. Organisation de la configuration Django
 
 La configuration du projet a été organisée dans le dossier `backend/config/settings` afin de séparer les paramètres selon l'environnement d'exécution.
@@ -42,17 +42,15 @@ Les services configurés sont :
 
 ### Lancement des conteneurs
 
-```bash
 docker compose up -d
-```
+
 
 ### Vérification
 
-```bash
-docker ps
-```
 
----
+docker ps
+
+
 
 # 3. Configuration des variables d'environnement
 
@@ -181,17 +179,17 @@ Après la création de tous les modèles, les migrations Django ont été géné
 
 Commande utilisée :
 
-```bash
+
 python manage.py makemigrations
-```
+
 
 Puis les migrations ont été appliquées avec :
 
-```bash
-python manage.py migrate
-```
 
----
+python manage.py migrate
+
+
+
 
 # 6. Configuration de PostgreSQL avec DBeaver
 
@@ -199,13 +197,12 @@ Pour administrer la base de données, DBeaver est utilisé comme interface graph
 
 Configuration de la connexion :
 
-```
+
 Host : localhost
 Port : 5432
 Database : zay_db
 Username : postgres
 Password : zay1234
-```
 
 Une fois connecté, DBeaver permet de visualiser les tables, d'exécuter des requêtes SQL et d'administrer la base de données.
 
