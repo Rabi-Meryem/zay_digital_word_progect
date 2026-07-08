@@ -2,7 +2,8 @@ import { useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import LoginPage from './pages/LoginPage'
-import DashboardPage from './pages/DashboardPage'
+import ClientDashboardPage from './pages/ClientDashboardPage'
+import TicketDetailPage from './pages/TicketDetailPage'
 import ProtectedRoute from './routes/ProtectedRoute'
 import { fetchMe } from './store/authSlice'
 import { getAccessToken } from './api/tokenStorage'
@@ -27,7 +28,15 @@ function App() {
         path="/dashboard"
         element={
           <ProtectedRoute>
-            <DashboardPage />
+            <ClientDashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/tickets/:ticketId"
+        element={
+          <ProtectedRoute>
+            <TicketDetailPage />
           </ProtectedRoute>
         }
       />
