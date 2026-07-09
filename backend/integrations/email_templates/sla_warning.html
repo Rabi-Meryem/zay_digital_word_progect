@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; background:#f4f4f4; padding:20px;">
+<div style="background:white;padding:30px;border-radius:8px;max-width:600px;margin:auto;">
+
+<h2 style="color:#F59E0B;">Alerte SLA ⚠️</h2>
+
+<p>Bonjour <strong>{{ agent_name }}</strong>,</p>
+
+<p>Le ticket suivant approche de son délai maximal de résolution.</p>
+
+<p><strong>Numéro :</strong> {{ ticket_number }}</p>
+
+<p><strong>Titre :</strong> {{ ticket_title }}</p>
+
+<p><strong>Temps restant :</strong> {{ remaining_time }}</p>
+
+<p>Merci de traiter ce ticket avant le dépassement du SLA.</p>
+
+<a href="{{ portal_url }}"
+style="background:#F59E0B;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin-top:15px;">
+Ouvrir le ticket
+</a>
+
+</div>
+</body>
+</html>
