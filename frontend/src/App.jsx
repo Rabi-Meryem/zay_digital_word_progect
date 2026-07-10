@@ -3,6 +3,10 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import LoginPage from './pages/LoginPage'
 import ClientDashboardPage from './pages/ClientDashboardPage'
+import AgentDashboardPage from './pages/AgentDashboardPage'
+import AgentTicketPage from './pages/AgentTicketPage'
+import AgentChatPage from './pages/AgentChatPage'
+import AgentMessagesPage from './pages/AgentMessagesPage'
 import TicketDetailPage from './pages/TicketDetailPage'
 import ProtectedRoute from './routes/ProtectedRoute'
 import { fetchMe } from './store/authSlice'
@@ -29,6 +33,38 @@ function App() {
         element={
           <ProtectedRoute>
             <ClientDashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/agent/dashboard"
+        element={
+          <ProtectedRoute>
+            <AgentDashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/agent/tickets/:ticketId"
+        element={
+          <ProtectedRoute>
+            <AgentTicketPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/agent/tickets/:ticketId/messages"
+        element={
+          <ProtectedRoute>
+            <AgentChatPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/agent/messages"
+        element={
+          <ProtectedRoute>
+            <AgentMessagesPage />
           </ProtectedRoute>
         }
       />

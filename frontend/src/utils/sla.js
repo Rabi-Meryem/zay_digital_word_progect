@@ -7,7 +7,9 @@
 const HOUR_MS = 60 * 60 * 1000
 
 const SLA_RULES = {
-  CRITICAL: { resolutionHours: 4, warningPercentage: 80 },
+  // Aligné sur le CDC (module 6) et sur backend/users/management/commands/seed_data.py :
+  // Critique 2h, Haute 8h, Moyenne 24h, Basse 72h.
+  CRITICAL: { resolutionHours: 2, warningPercentage: 80 },
   HIGH: { resolutionHours: 8, warningPercentage: 80 },
   MEDIUM: { resolutionHours: 24, warningPercentage: 80 },
   LOW: { resolutionHours: 72, warningPercentage: 80 },

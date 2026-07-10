@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { Eye, EyeOff, LogIn } from 'lucide-react'
 import { login } from '../store/authSlice'
+import ForgotPasswordModal from '../components/auth/ForgotPasswordModal'
 
 // Note : la création de compte a été retirée de cet écran — elle est réservée
 // à l'administrateur, qui crée les comptes depuis sa propre interface.
@@ -21,6 +22,7 @@ const loginSchema = z.object({
 
 function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
 
   const dispatch = useDispatch()
   const navigate = useNavigate()
@@ -36,14 +38,15 @@ function LoginPage() {
     const result = await dispatch(login(values))
     if (login.fulfilled.match(result)) {
       toast.success('Connexion réussie.')
-      navigate('/dashboard')
+      // Aiguillage selon le rôle renvoyé par le backend (/auth/login/ → user.role.name) :
+      // un AGENT atterrit sur sa console (Écran 2.1), les autres sur le portail client.
+      // SUPERVISOR et ADMIN iront vers leurs propres espaces quand ils existeront.
+      const roleName = result.payload?.role?.name
+      navigate(roleName === 'AGENT' ? '/agent/dashboard' : '/dashboard')
     } else {
       toast.error(result.payload || 'Échec de la connexion.')
     }
   }
-
-  const notAvailableYet = () =>
-    toast('Fonctionnalité pas encore disponible côté serveur.', { icon: 'ℹ️' })
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -136,7 +139,7 @@ function LoginPage() {
 
             <button
               type="button"
-              onClick={notAvailableYet}
+              onClick={() => setShowForgotPassword(true)}
               className="w-full text-center text-sm text-secondary hover:underline"
             >
               Mot de passe oublié ?
@@ -144,6 +147,10 @@ function LoginPage() {
           </form>
         </div>
       </div>
+
+      {showForgotPassword && (
+        <ForgotPasswordModal onClose={() => setShowForgotPassword(false)} />
+      )}
     </div>
   )
 }
