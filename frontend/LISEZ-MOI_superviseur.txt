@@ -1,0 +1,15 @@
+ESPACE SUPERVISEUR — Fichiers frontend (React/Vite)
+====================================================
+Extraire ce zip À LA RACINE du projet (comme pour le portail agent),
+en acceptant le remplacement de App.jsx et LoginPage.jsx.
+
+4 fichiers :
+  NOUVEAUX
+   - frontend/src/pages/supervisor/SupervisorDashboardPage.jsx
+   - frontend/src/data/mockSupervisor.js
+  REMPLACEMENTS (voulus)
+   - frontend/src/App.jsx          -> ajout de la route /supervisor/dashboard
+   - frontend/src/pages/LoginPage.jsx -> redirection SUPERVISOR -> /supervisor/dashboard
+
+Aucune dépendance à installer : recharts et lucide-react sont déjà dans ton package.json.
+Données de démonstration dans mockSupervisor.js (à brancher sur les vraies routes API plus tard).

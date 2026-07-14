@@ -1,0 +1,5 @@
+Commit: 983717a — Portail agent complet : fiche ticket (2.2), chat (2.3), escalade (2.4), notifications, messages, mot de passe oublie (2026-07-10 18:40:01 +0100)
+
+Export du dossier frontend/ — dépôt Rabi-Meryem/zay_digital_word_progect
+Branche : feature/agent-dashboard (client + agent + login + données mock)
+Pour lancer : cd frontend && npm install && npm run dev
