@@ -12,7 +12,7 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes', 'django.contrib.sessions',
     'django.contrib.messages', 'django.contrib.staticfiles',
     # Third party
-    'rest_framework', 'rest_framework_simplejwt',
+    'rest_framework','rest_framework_simplejwt.token_blacklist',
     'corsheaders', 'channels', 'drf_spectacular', 'django_filters',
     # Local apps — ORDRE IMPORTANT pour les dépendances de migrations (FK)
     'users.apps.UsersConfig',
