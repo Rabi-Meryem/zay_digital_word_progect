@@ -7,6 +7,7 @@ import AgentDashboardPage from './pages/AgentDashboardPage'
 import AgentTicketPage from './pages/AgentTicketPage'
 import AgentChatPage from './pages/AgentChatPage'
 import AgentMessagesPage from './pages/AgentMessagesPage'
+import SupervisorDashboardPage from './pages/supervisor/SupervisorDashboardPage'
 import TicketDetailPage from './pages/TicketDetailPage'
 import ProtectedRoute from './routes/ProtectedRoute'
 import { fetchMe } from './store/authSlice'
@@ -57,6 +58,14 @@ function App() {
         element={
           <ProtectedRoute>
             <AgentChatPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/supervisor/dashboard"
+        element={
+          <ProtectedRoute>
+            <SupervisorDashboardPage />
           </ProtectedRoute>
         }
       />

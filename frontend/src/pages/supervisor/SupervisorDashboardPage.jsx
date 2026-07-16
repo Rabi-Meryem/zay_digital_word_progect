@@ -1,0 +1,740 @@
+import { useState, useMemo } from 'react'
+import { useSelector, useDispatch } from 'react-redux'
+import {
+  LayoutDashboard, ArrowUpCircle, AlarmClock, Users, FileText,
+  Bell, LogOut, Download, ArrowLeftRight, ShieldCheck, Layers, Lock,
+  MessageCircle, Clock, AlertTriangle, CheckCircle2, User, Building2, X, Check,
+} from 'lucide-react'
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, PieChart, Pie, Cell,
+} from 'recharts'
+import PriorityBadge from '../../components/tickets/PriorityBadge'
+import StatusBadge from '../../components/tickets/StatusBadge'
+import SlaBar from '../../components/tickets/SlaBar'
+import { getSlaInfo } from '../../utils/sla'
+import { logout } from '../../store/authSlice'
+import {
+  MOCK_KPIS, MOCK_VOLUME, MOCK_STATUS, MOCK_AI_CLASS, MOCK_AI_CONF, MOCK_AI_CONF_AVG,
+  MOCK_ESCALATIONS, MOCK_SLA_TICKETS, MOCK_AGENTS, REASSIGN_TARGETS,
+} from '../../data/mockSupervisor'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Espace Superviseur — Écrans 3.x (Vue d'ensemble, Escalades, Supervision SLA,
+// Performance équipe, Rapports). Vue frontend seule : les données viennent de
+// mockSupervisor.js (à remplacer par les routes API quand elles existeront).
+// Charte projet : primary #1E3A5F, secondary #2D6A9F, accent #E8A020.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const COLORS = {
+  primary: '#1E3A5F', secondary: '#2D6A9F', accent: '#E8A020',
+  success: '#27AE60', danger: '#C0392B', slate: '#cbd5e1',
+}
+const AI_COLORS = [COLORS.danger, COLORS.accent, COLORS.secondary, COLORS.slate]
+
+const REASON_STYLES = {
+  ACCESS: { className: 'text-primary border-primary/30', Icon: Lock },
+  COMPETENCE: { className: 'text-secondary border-secondary/40', Icon: Layers },
+  SLA_RISK: { className: 'text-danger border-danger/40', Icon: Clock },
+  CLIENT: { className: 'text-accent border-accent/50', Icon: MessageCircle },
+}
+
+const NAV = [
+  { key: 'overview', label: "Vue d'ensemble", Icon: LayoutDashboard },
+  { key: 'escalations', label: 'Escalades', Icon: ArrowUpCircle },
+  { key: 'sla', label: 'Supervision SLA', Icon: AlarmClock },
+  { key: 'team', label: 'Performance équipe', Icon: Users },
+  { key: 'reports', label: 'Rapports', Icon: FileText },
+]
+
+function Avatar({ initials, color, size = 28 }) {
+  return (
+    <span
+      className="rounded-full text-white font-semibold flex items-center justify-center shrink-0"
+      style={{ background: color, height: size, width: size, fontSize: size * 0.4 }}
+    >
+      {initials}
+    </span>
+  )
+}
+
+function Stars({ value }) {
+  const full = Math.round(value)
+  return (
+    <span className="text-accent tracking-wide text-sm" aria-label={`${value} sur 5`}>
+      {'★'.repeat(full)}
+      <span className="text-slate-300">{'★'.repeat(5 - full)}</span>
+      <span className="text-slate-400 text-xs ml-1">{value.toFixed(1)}</span>
+    </span>
+  )
+}
+
+function SupervisorDashboardPage() {
+  const user = useSelector((state) => state.auth.user)
+  const dispatch = useDispatch()
+  const [section, setSection] = useState('overview')
+  const [reassign, setReassign] = useState(null) // { number, title } | null
+
+  const name = user ? `${user.first_name} ${user.last_name ?? ''}`.trim() : 'Karim Said'
+  const initials = name.split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase()
+
+  // Compteur d'escalades en attente (badge sidebar) — calculé depuis les données.
+  const pendingEsc = useMemo(
+    () => MOCK_ESCALATIONS.filter((e) => e.state === 'pending').length,
+    []
+  )
+  const slaBreachedCount = MOCK_KPIS.slaBreached
+
+  return (
+    <div className="min-h-screen bg-slate-50 md:flex">
+      {/* ── Barre latérale ──────────────────────────────────────────────── */}
+      <aside className="hidden md:flex md:flex-col w-60 shrink-0 bg-white border-r border-slate-200 min-h-screen sticky top-0">
+        <div className="px-5 py-5 border-b border-slate-100">
+          <p className="font-semibold text-primary">ZAY Digital World</p>
+          <p className="text-xs text-slate-400">Console Superviseur</p>
+        </div>
+
+        <nav className="flex-1 px-3 py-4 space-y-1">
+          {NAV.map(({ key, label, Icon }) => {
+            const active = section === key
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setSection(key)}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm ${
+                  active ? 'bg-primary/5 text-primary font-medium' : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <Icon size={16} />
+                {label}
+                {key === 'escalations' && pendingEsc > 0 && (
+                  <span className="ml-auto text-xs font-semibold bg-danger text-white rounded-full px-1.5 py-0.5 min-w-5 text-center">
+                    {pendingEsc}
+                  </span>
+                )}
+                {key === 'sla' && slaBreachedCount > 0 && (
+                  <span className="ml-auto text-xs font-semibold bg-accent text-white rounded-full px-1.5 py-0.5 min-w-5 text-center">
+                    {slaBreachedCount}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </nav>
+
+        <div className="px-4 py-4 border-t border-slate-100 flex items-center gap-2.5">
+          <Avatar initials={initials} color={COLORS.primary} size={32} />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-slate-700 truncate">{name}</p>
+            <p className="text-xs text-slate-400">Superviseur</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => dispatch(logout())}
+            className="text-slate-400 hover:text-slate-600"
+            aria-label="Se déconnecter"
+          >
+            <LogOut size={16} />
+          </button>
+        </div>
+      </aside>
+
+      {/* ── En-tête mobile ──────────────────────────────────────────────── */}
+      <header className="md:hidden bg-primary text-primary-foreground px-4 py-4 flex items-center justify-between">
+        <div>
+          <p className="font-semibold text-sm">ZAY Digital World</p>
+          <p className="text-xs text-primary-foreground/70">Console Superviseur</p>
+        </div>
+        <button type="button" onClick={() => dispatch(logout())} className="opacity-80 hover:opacity-100" aria-label="Se déconnecter">
+          <LogOut size={18} />
+        </button>
+      </header>
+
+      {/* ── Onglets mobile (la sidebar est masquée) ─────────────────────── */}
+      <div className="md:hidden flex gap-1 overflow-x-auto px-3 py-2 bg-white border-b border-slate-200">
+        {NAV.map(({ key, label }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setSection(key)}
+            className={`whitespace-nowrap text-sm px-3 py-1.5 rounded-full ${
+              section === key ? 'bg-primary text-white' : 'text-slate-600'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Contenu ─────────────────────────────────────────────────────── */}
+      <main className="flex-1 min-w-0 p-4 sm:p-6">
+        {section === 'overview' && <Overview />}
+        {section === 'escalations' && <Escalations onReassign={setReassign} />}
+        {section === 'sla' && <SlaSupervision onReassign={setReassign} />}
+        {section === 'team' && <Team />}
+        {section === 'reports' && <Reports />}
+      </main>
+
+      {reassign && <ReassignModal ticket={reassign} onClose={() => setReassign(null)} />}
+    </div>
+  )
+}
+
+/* ════════════════ SECTION 1 — VUE D'ENSEMBLE ════════════════ */
+function TopBar({ title, desc, children }) {
+  return (
+    <div className="flex items-start justify-between gap-3 mb-5">
+      <div>
+        <h1 className="text-lg font-semibold text-slate-800">{title}</h1>
+        {desc && <p className="text-sm text-slate-500 mt-0.5">{desc}</p>}
+      </div>
+      <div className="flex items-center gap-2 shrink-0">{children}</div>
+    </div>
+  )
+}
+
+function BellButton() {
+  return (
+    <button type="button" className="relative text-slate-500 hover:text-slate-700" aria-label="Notifications">
+      <Bell size={19} />
+      <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-danger" />
+    </button>
+  )
+}
+
+function Kpi({ label, value, warn, trend }) {
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl px-4 py-3">
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className={`text-2xl font-bold mt-1 ${warn ? 'text-danger' : 'text-slate-800'}`}>{value}</p>
+      {trend && <p className="text-[11px] text-slate-400 mt-1">{trend}</p>}
+    </div>
+  )
+}
+
+function Card({ title, hint, right, children, className = '' }) {
+  return (
+    <div className={`bg-white border border-slate-200 rounded-xl p-4 ${className}`}>
+      {(title || right) && (
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            {title && <p className="text-sm font-semibold text-slate-700">{title}</p>}
+            {hint && <p className="text-xs text-slate-400">{hint}</p>}
+          </div>
+          {right}
+        </div>
+      )}
+      {children}
+    </div>
+  )
+}
+
+function Overview() {
+  const k = MOCK_KPIS
+  return (
+    <>
+      <TopBar title="Vue d'ensemble" desc="Indicateurs de performance de la plateforme">
+        <button type="button" className="hidden sm:flex items-center gap-1.5 text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50">
+          <Download size={14} /> Export PDF
+        </button>
+        <BellButton />
+      </TopBar>
+
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-5">
+        <Kpi label="Total tickets" value={k.total.toLocaleString('fr-FR')} trend="▲ 6,2% ce mois" />
+        <Kpi label="Ouverts" value={k.open} />
+        <Kpi label="En cours" value={k.inProgress} />
+        <Kpi label="Résolus" value={k.resolved} />
+        <Kpi label="Critiques actifs" value={k.criticalActive} warn />
+        <Kpi label="SLA non respecté" value={k.slaBreached} warn />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+        <Card title="Volume de tickets" hint="7 derniers jours · créés vs résolus">
+          <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={MOCK_VOLUME} margin={{ top: 5, right: 8, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" vertical={false} />
+              <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+              <Tooltip />
+              <Line type="monotone" dataKey="crees" name="Créés" stroke={COLORS.secondary} strokeWidth={2.5} dot={false} />
+              <Line type="monotone" dataKey="resolus" name="Résolus" stroke={COLORS.success} strokeWidth={2.5} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+          <div className="flex gap-4 justify-center text-xs text-slate-500 mt-1">
+            <span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm inline-block" style={{ background: COLORS.secondary }} />Créés</span>
+            <span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm inline-block" style={{ background: COLORS.success }} />Résolus</span>
+          </div>
+        </Card>
+
+        <Card title="Répartition par statut" hint="tickets actifs">
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={MOCK_STATUS} margin={{ top: 15, right: 8, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+              <Tooltip cursor={{ fill: '#f8fafc' }} />
+              <Bar dataKey="value" radius={[5, 5, 0, 0]}>
+                <Cell fill="#94a3b8" /><Cell fill={COLORS.secondary} /><Cell fill={COLORS.success} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+
+        <Card title="Classification IA" hint="par criticité">
+          <div className="flex items-center gap-3">
+            <ResponsiveContainer width="55%" height={160}>
+              <PieChart>
+                <Pie data={MOCK_AI_CLASS} dataKey="value" nameKey="name" innerRadius={40} outerRadius={62} paddingAngle={2} stroke="none">
+                  {MOCK_AI_CLASS.map((e, i) => <Cell key={i} fill={AI_COLORS[i]} />)}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="flex-1 space-y-1.5 text-xs text-slate-600">
+              {MOCK_AI_CLASS.map((e, i) => (
+                <div key={e.name} className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-sm" style={{ background: AI_COLORS[i] }} />
+                  {e.name}<span className="ml-auto font-semibold text-slate-700">{e.value}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card title="Conformité SLA">
+          <div className="flex items-center gap-6">
+            <Gauge value={k.slaCompliance} />
+            <div className="flex-1 space-y-3">
+              <div className="flex items-center justify-between">
+                <div><p className="text-2xl font-bold text-accent">20</p><p className="text-xs text-slate-400">tickets à risque</p></div>
+                <AlertTriangle size={24} className="text-accent" />
+              </div>
+              <div className="border-t border-slate-100" />
+              <div className="flex items-center justify-between">
+                <div><p className="text-2xl font-bold text-danger">{k.slaBreached}</p><p className="text-xs text-slate-400">en dépassement</p></div>
+                <Clock size={24} className="text-danger" />
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <Card title="Insights IA" hint="fiabilité du module de classification"
+          right={<span className="text-xs font-semibold px-2 py-0.5 rounded bg-secondary/10 text-secondary">Mistral 7B · fallback</span>}>
+          {MOCK_AI_CONF.map((r) => (
+            <div key={r.label} className="flex items-center justify-between text-sm py-2 border-b border-slate-100 last:border-0">
+              <span className="text-slate-600">{r.label}</span>
+              <span className="font-semibold text-slate-700">{r.value}%</span>
+            </div>
+          ))}
+          <div className="mt-3 bg-slate-50 rounded-lg px-3 py-2.5">
+            <div className="flex justify-between text-xs text-slate-600">
+              <span>Score de confiance moyen</span>
+              <span className="font-bold text-success">{MOCK_AI_CONF_AVG}%</span>
+            </div>
+            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden mt-1.5">
+              <div className="h-full bg-success rounded-full" style={{ width: `${MOCK_AI_CONF_AVG}%` }} />
+            </div>
+            <p className="text-xs text-slate-400 mt-1.5">Sous le seuil (~90%), le ticket est repassé au LLM local pour arbitrage.</p>
+          </div>
+        </Card>
+      </div>
+    </>
+  )
+}
+
+// Jauge semi-circulaire (SVG) — 0 à 100.
+function Gauge({ value }) {
+  const r = 64, cx = 80, cy = 88
+  const a = Math.PI * (1 - value / 100)
+  const x = cx + r * Math.cos(a), y = cy - r * Math.sin(a)
+  return (
+    <svg viewBox="0 0 160 100" width="160" height="100">
+      <path d={`M16 ${cy} A${r} ${r} 0 0 1 144 ${cy}`} fill="none" stroke="#f1f5f9" strokeWidth="14" strokeLinecap="round" />
+      <path d={`M16 ${cy} A${r} ${r} 0 0 1 ${x} ${y}`} fill="none" stroke={COLORS.success} strokeWidth="14" strokeLinecap="round" />
+      <text x="80" y="76" fontSize="26" fontWeight="700" fill="#1e293b" textAnchor="middle">{value}%</text>
+      <text x="80" y="90" fontSize="9" fill="#94a3b8" textAnchor="middle">objectif : 90%</text>
+    </svg>
+  )
+}
+
+/* ════════════════ SECTION 2 — ESCALADES ════════════════ */
+function ReasonChip({ reason }) {
+  const s = REASON_STYLES[reason.key] ?? REASON_STYLES.ACCESS
+  const { Icon } = s
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border bg-white ${s.className}`}>
+      <Icon size={11} />{reason.label}
+    </span>
+  )
+}
+
+function Escalations({ onReassign }) {
+  const [filter, setFilter] = useState('all')
+  const list = MOCK_ESCALATIONS.filter((e) =>
+    filter === 'all' ? true : filter === 'pending' ? e.state === 'pending' : e.state === 'taken'
+  )
+  const nPending = MOCK_ESCALATIONS.filter((e) => e.state === 'pending').length
+  const nTaken = MOCK_ESCALATIONS.filter((e) => e.state === 'taken').length
+
+  const CHIPS = [
+    { key: 'all', label: `Toutes (${MOCK_ESCALATIONS.length})` },
+    { key: 'pending', label: `En attente (${nPending})` },
+    { key: 'taken', label: `Prises en charge (${nTaken})` },
+  ]
+
+  return (
+    <>
+      <TopBar title="Escalades reçues" desc="Tickets transmis par les agents de Niveau 1 · à qualifier et affecter">
+        <BellButton />
+      </TopBar>
+
+      <div className="flex gap-2 mb-4 flex-wrap">
+        {CHIPS.map((c) => (
+          <button key={c.key} type="button" onClick={() => setFilter(c.key)}
+            className={`text-sm px-4 py-1.5 rounded-full border ${
+              filter === c.key ? 'bg-primary text-white border-primary' : 'bg-white text-slate-600 border-slate-200'
+            }`}>
+            {c.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="space-y-3.5 max-w-4xl">
+        {list.map((e) => {
+          const border = e.priority === 'CRITICAL' ? 'border-l-danger' : e.priority === 'HIGH' ? 'border-l-accent' : 'border-l-slate-200'
+          return (
+            <div key={e.id} className={`bg-white border border-slate-200 border-l-[3px] ${border} rounded-xl p-4`}>
+              <div className="flex justify-between gap-3">
+                <div>
+                  <p className="text-xs text-slate-400">{e.number} · {e.date}</p>
+                  <p className="font-semibold text-slate-800 mt-0.5">{e.title}</p>
+                  <p className="flex items-center gap-1.5 text-xs text-slate-500 mt-1"><User size={12} />{e.client} · {e.company}</p>
+                </div>
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  <PriorityBadge priority={e.priority} />
+                  {e.state === 'taken'
+                    ? <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-success/10 text-success whitespace-nowrap">Pris en charge</span>
+                    : <StatusBadge status="ESCALATED" />}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap mt-3">
+                <span className="flex items-center gap-1.5 text-xs text-slate-500">
+                  <Avatar initials={e.escalatedBy.initials} color={e.escalatedBy.color} size={22} />
+                  Escaladé par {e.escalatedBy.name}
+                </span>
+                <ReasonChip reason={e.reason} />
+                {e.takenNote && <span className="text-xs text-slate-400">· {e.takenNote}</span>}
+              </div>
+
+              <div className="mt-3"><SlaBar createdAt={e.createdAt} slaDeadline={e.slaDeadline} priority={e.priority} /></div>
+
+              <p className="mt-3 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs text-slate-600 italic leading-relaxed">
+                « {e.context} »
+              </p>
+
+              <div className="flex gap-2 mt-3 flex-wrap">
+                {e.state === 'pending' ? (
+                  <>
+                    <button type="button" className="text-xs font-medium bg-primary text-white rounded-lg px-3 py-2 hover:bg-primary/90">Prendre en charge</button>
+                    <button type="button" onClick={() => onReassign({ number: e.number, title: e.title })}
+                      className="flex items-center gap-1.5 text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50">
+                      <ArrowLeftRight size={14} /> Réaffecter
+                    </button>
+                    <button type="button" className="text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50">Renvoyer à l'agent</button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" className="text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50">Ouvrir la fiche</button>
+                    <button type="button" className="text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50">Messages</button>
+                  </>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </>
+  )
+}
+
+/* ════════════════ SECTION 3 — SUPERVISION SLA ════════════════ */
+function MiniStat({ Icon, tint, value, label, valueColor }) {
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl px-4 py-3.5 flex items-center gap-3">
+      <span className="h-10 w-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: tint.bg, color: tint.fg }}>
+        <Icon size={20} />
+      </span>
+      <div>
+        <p className="text-xl font-bold leading-none" style={{ color: valueColor }}>{value}</p>
+        <p className="text-xs text-slate-500 mt-0.5">{label}</p>
+      </div>
+    </div>
+  )
+}
+
+function SlaSupervision({ onReassign }) {
+  const [filter, setFilter] = useState('all')
+  const rows = MOCK_SLA_TICKETS
+    .map((t) => ({ ...t, info: getSlaInfo(t.createdAt, t.slaDeadline, t.priority) }))
+    .filter((t) => (filter === 'all' ? true : filter === 'bad' ? t.info.level === 'breached' : t.info.level !== 'breached'))
+    .sort((a, b) => a.info.remainingMs - b.info.remainingMs)
+
+  const CHIPS = [{ key: 'all', label: 'Tous' }, { key: 'bad', label: 'Dépassé' }, { key: 'risk', label: 'À risque' }]
+
+  return (
+    <>
+      <TopBar title="Supervision SLA" desc="Surveillance des délais en temps réel · tri par urgence"><BellButton /></TopBar>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+        <MiniStat Icon={AlertTriangle} tint={{ bg: 'rgba(192,57,43,.10)', fg: COLORS.danger }} value={MOCK_KPIS.slaBreached} valueColor={COLORS.danger} label="SLA dépassé" />
+        <MiniStat Icon={Clock} tint={{ bg: 'rgba(232,160,32,.14)', fg: COLORS.accent }} value="20" valueColor={COLORS.accent} label="À risque (< 80%)" />
+        <MiniStat Icon={CheckCircle2} tint={{ bg: 'rgba(39,174,96,.12)', fg: COLORS.success }} value="46" valueColor={COLORS.success} label="Respectés aujourd'hui" />
+      </div>
+
+      <div className="flex gap-2 mb-4">
+        {CHIPS.map((c) => (
+          <button key={c.key} type="button" onClick={() => setFilter(c.key)}
+            className={`text-sm px-4 py-1.5 rounded-full border ${filter === c.key ? 'bg-primary text-white border-primary' : 'bg-white text-slate-600 border-slate-200'}`}>
+            {c.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-200">
+                <th className="px-4 py-3">Ticket</th><th className="px-4 py-3">Client</th><th className="px-4 py-3">Agent</th>
+                <th className="px-4 py-3">Priorité</th><th className="px-4 py-3 w-1/4">SLA</th><th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((t) => (
+                <tr key={t.number} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                  <td className="px-4 py-3"><p className="font-semibold text-slate-800 text-sm">{t.number}</p><p className="text-xs text-slate-400">{t.title}</p></td>
+                  <td className="px-4 py-3 text-sm text-slate-600">{t.client}</td>
+                  <td className="px-4 py-3"><span className="flex items-center gap-2 text-sm text-slate-600"><Avatar initials={t.agent.initials} color={t.agent.color} size={26} />{t.agent.name}</span></td>
+                  <td className="px-4 py-3"><PriorityBadge priority={t.priority} /></td>
+                  <td className="px-4 py-3"><SlaBar createdAt={t.createdAt} slaDeadline={t.slaDeadline} priority={t.priority} /></td>
+                  <td className="px-4 py-3 text-right">
+                    <button type="button" onClick={() => onReassign({ number: t.number, title: t.title })}
+                      className="text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-1.5 hover:bg-slate-50 whitespace-nowrap">Réaffecter</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  )
+}
+
+/* ════════════════ SECTION 4 — PERFORMANCE ÉQUIPE ════════════════ */
+function Team() {
+  const chargeData = MOCK_AGENTS.map((a) => ({ name: a.initials, load: a.activeLoad }))
+  const avgSat = (MOCK_AGENTS.reduce((s, a) => s + a.satisfaction, 0) / MOCK_AGENTS.length).toFixed(1)
+
+  return (
+    <>
+      <TopBar title="Performance de l'équipe" desc="Charge, délais et satisfaction par agent · 30 derniers jours">
+        <button type="button" className="hidden sm:flex items-center gap-1.5 text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50">
+          <Download size={14} /> Exporter
+        </button>
+      </TopBar>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+        <MiniStat Icon={Users} tint={{ bg: 'rgba(45,106,159,.10)', fg: COLORS.secondary }} value={MOCK_AGENTS.length} valueColor="#1e293b" label="Agents actifs" />
+        <MiniStat Icon={Clock} tint={{ bg: 'rgba(232,160,32,.14)', fg: COLORS.accent }} value="4h 11" valueColor="#1e293b" label="Temps moyen résolution" />
+        <MiniStat Icon={CheckCircle2} tint={{ bg: 'rgba(39,174,96,.12)', fg: COLORS.success }} value={`${avgSat}/5`} valueColor="#1e293b" label="Satisfaction moyenne" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+        <Card title="Charge actuelle" hint="tickets actifs par agent" className="lg:col-span-2">
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={chargeData} margin={{ top: 15, right: 8, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+              <Tooltip cursor={{ fill: '#f8fafc' }} />
+              <Bar dataKey="load" radius={[5, 5, 0, 0]}>
+                {chargeData.map((d, i) => <Cell key={i} fill={d.load >= 14 ? COLORS.accent : COLORS.secondary} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          <p className="text-xs text-slate-400 text-center mt-1">Y. Bennani proche de la surcharge (15 tickets).</p>
+        </Card>
+
+        <div className="lg:col-span-3 bg-white border border-slate-200 rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-200">
+                  <th className="px-4 py-3">Agent</th><th className="px-4 py-3">Traités</th><th className="px-4 py-3">Tps moyen</th>
+                  <th className="px-4 py-3 w-1/5">Conformité SLA</th><th className="px-4 py-3">Satisfaction</th>
+                </tr>
+              </thead>
+              <tbody>
+                {MOCK_AGENTS.map((a) => (
+                  <tr key={a.name} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                    <td className="px-4 py-3">
+                      <span className="flex items-center gap-2.5">
+                        <Avatar initials={a.initials} color={a.color} size={30} />
+                        <span><span className="block text-sm font-semibold text-slate-800">{a.name}</span><span className="block text-[11px] text-slate-400">Agent · {a.level}</span></span>
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-600">{a.handled}</td>
+                    <td className="px-4 py-3 text-sm text-slate-600">{a.avgResolution}</td>
+                    <td className="px-4 py-3">
+                      <span className="flex items-center gap-2">
+                        <span className="h-1.5 w-20 rounded-full bg-slate-100 overflow-hidden">
+                          <span className="block h-full rounded-full" style={{ width: `${a.slaCompliance}%`, background: a.slaCompliance >= 90 ? COLORS.success : COLORS.accent }} />
+                        </span>
+                        <span className="text-xs font-semibold text-slate-600">{a.slaCompliance}%</span>
+                      </span>
+                    </td>
+                    <td className="px-4 py-3"><Stars value={a.satisfaction} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+/* ════════════════ SECTION 5 — RAPPORTS ════════════════ */
+function Reports() {
+  const [fmt, setFmt] = useState('PDF')
+  const FORMATS = ['PDF', 'Excel', 'CSV']
+  const CONTENT = [
+    { label: 'Synthèse des KPIs (volumes, SLA)', on: true },
+    { label: 'Performance par agent', on: true },
+    { label: 'Détail des tickets escaladés', on: true },
+    { label: 'Distribution des classifications IA', on: false },
+  ]
+  return (
+    <>
+      <TopBar title="Rapports & exports" desc="Générer un rapport de performance filtré au format PDF, Excel ou CSV"><BellButton /></TopBar>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 max-w-4xl">
+        <Card title="Paramètres du rapport">
+          <div className="space-y-3.5">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Période</label>
+              <div className="flex gap-2">
+                <input readOnly value="01/07/2026" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700" />
+                <input readOnly value="14/07/2026" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700" />
+              </div>
+            </div>
+            {['Agent', 'Priorité', 'Statut'].map((f) => (
+              <div key={f}>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">{f}</label>
+                <select className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700 bg-white">
+                  <option>Tou{f === 'Priorité' ? 'tes les priorités' : f === 'Statut' ? 's les statuts' : 's les agents'}</option>
+                </select>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card title="Format d'export">
+          <div className="flex gap-2 mb-5">
+            {FORMATS.map((f) => (
+              <button key={f} type="button" onClick={() => setFmt(f)}
+                className={`flex-1 border rounded-xl py-3 flex flex-col items-center gap-1.5 text-xs font-medium ${
+                  fmt === f ? 'border-secondary bg-secondary/5 text-secondary' : 'border-slate-200 text-slate-600'
+                }`}>
+                <FileText size={20} />{f}
+              </button>
+            ))}
+          </div>
+          <p className="text-sm font-semibold text-slate-700 mb-1.5">Contenu du rapport</p>
+          {CONTENT.map((c) => (
+            <div key={c.label} className="flex items-center gap-2.5 py-1.5 text-sm">
+              <span className={`h-4 w-4 rounded flex items-center justify-center ${c.on ? 'bg-secondary' : 'border border-slate-300'}`}>
+                {c.on && <Check size={11} className="text-white" strokeWidth={3} />}
+              </span>
+              <span className={c.on ? 'text-slate-600' : 'text-slate-400'}>{c.label}</span>
+            </div>
+          ))}
+          <button type="button" className="w-full flex items-center justify-center gap-2 bg-primary text-white rounded-lg py-2.5 text-sm font-medium mt-4 hover:bg-primary/90">
+            <Download size={15} /> Générer le rapport
+          </button>
+        </Card>
+      </div>
+    </>
+  )
+}
+
+/* ════════════════ MODALE — RÉAFFECTATION ════════════════ */
+function ReassignModal({ ticket, onClose }) {
+  const [selected, setSelected] = useState(2)
+  return (
+    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" onClick={onClose}>
+      <div className="w-full max-w-lg bg-white rounded-2xl shadow-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-slate-100">
+          <div className="flex gap-2.5">
+            <ArrowLeftRight size={19} className="text-secondary mt-0.5" />
+            <div>
+              <p className="font-semibold text-slate-800">Réaffecter le ticket {ticket.number}</p>
+              <p className="text-xs text-slate-500 mt-0.5">{ticket.title}</p>
+            </div>
+          </div>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+        </div>
+
+        <div className="px-5 py-4 space-y-4">
+          <div>
+            <p className="text-sm font-semibold text-slate-700 mb-2">Affecter à</p>
+            <div className="space-y-2">
+              {REASSIGN_TARGETS.map((t, i) => (
+                <button key={t.name} type="button" onClick={() => setSelected(i)}
+                  className={`w-full text-left border rounded-xl px-3.5 py-3 flex items-center gap-3 ${
+                    selected === i ? 'border-secondary bg-secondary/5' : 'border-slate-200 hover:bg-slate-50'
+                  }`}>
+                  {t.initials === 'N2'
+                    ? <span className="h-7 w-7 rounded-full bg-slate-500 text-white flex items-center justify-center shrink-0"><Building2 size={15} /></span>
+                    : <Avatar initials={t.initials} color={t.color} size={28} />}
+                  <span className="flex-1">
+                    <span className="block text-sm font-semibold text-slate-700">{t.name}</span>
+                    <span className="block text-xs text-slate-500">{t.level}</span>
+                  </span>
+                  {t.load != null && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{t.load} tickets</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Note pour l'agent (optionnel)</label>
+            <textarea rows={2} placeholder="Consignes, contexte, priorité de traitement…"
+              className="w-full border border-slate-300 rounded-lg p-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-secondary/40" />
+          </div>
+
+          <div className="flex gap-2.5 items-start bg-accent/10 border border-accent/30 rounded-lg px-3 py-2.5 text-xs text-amber-800">
+            <AlertTriangle size={15} className="text-accent shrink-0 mt-0.5" />
+            L'agent sélectionné sera notifié immédiatement par email et sur la plateforme.
+          </div>
+        </div>
+
+        <div className="flex gap-2.5 px-5 py-4 border-t border-slate-100">
+          <button type="button" onClick={onClose} className="flex-1 bg-white border border-slate-200 text-slate-600 rounded-lg py-2.5 text-sm font-medium hover:bg-slate-50">Annuler</button>
+          <button type="button" onClick={onClose} className="flex-1 flex items-center justify-center gap-2 bg-primary text-white rounded-lg py-2.5 text-sm font-medium hover:bg-primary/90">
+            <Check size={15} /> Confirmer la réaffectation
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default SupervisorDashboardPage
