@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; background:#f4f4f4; padding:20px;">
+<div style="background:white;padding:30px;border-radius:8px;max-width:600px;margin:auto;">
+
+<h2 style="color:#DC2626;">SLA dépassé 🚨</h2>
+
+<p>Bonjour <strong>{{ recipient_name }}</strong>,</p>
+
+<p>Le délai SLA du ticket ci-dessous est dépassé.</p>
+
+<p><strong>Numéro :</strong> {{ ticket_number }}</p>
+
+<p><strong>Titre :</strong> {{ ticket_title }}</p>
+
+<p><strong>Priorité :</strong> {{ priority }}</p>
+
+<p>Une escalade a été automatiquement déclenchée.</p>
+
+<a href="{{ portal_url }}"
+style="background:#DC2626;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin-top:15px;">
+Consulter le ticket
+</a>
+
+</div>
+</body>
+</html>

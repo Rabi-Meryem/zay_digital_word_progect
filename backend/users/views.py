@@ -1,5 +1,3 @@
-from django.shortcuts import render
-
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -7,21 +5,22 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
+from datetime import timedelta
+
  
 from users.models import User, LoginHistory
 from users.serializers import (
-    UserSerializer, UserCreateSerializer,
-    UserUpdateSerializer, PasswordResetSerializer,
-    ProfileUpdateSerializer
+    UserSerializer, UserListSerializer, UserCreateSerializer,
+    UserUpdateSerializer, PasswordResetSerializer, ProfileUpdateSerializer
 )
 from users.permissions import IsAdminRole, IsAdminOrSupervisor
+from users.filters import UserFilter
 from logs_app.models import AuditLog
  
  
-# -----------------------------------------------------------------------
-# Helper : enregistrer un log d'audit sans répéter ce code partout
-# -----------------------------------------------------------------------
-def log_action(user, action_type, description, request=None, target_model=None, target_id=None):
+# ─── Helper log ─────────────────────────────────────────────────────────────
+def log_action(user, action_type, description,
+               request=None, target_model=None, target_id=None):
     AuditLog.objects.create(
         user=user,
         action_type=action_type,
@@ -33,37 +32,32 @@ def log_action(user, action_type, description, request=None, target_model=None, 
     )
  
  
-# -----------------------------------------------------------------------
-# POST /api/auth/login/
-# Ouverte à tous (AllowAny), vérifie email + mot de passe, renvoie JWT
-# -----------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# AUTH
+# ─────────────────────────────────────────────────────────────────────────────
+ 
 class LoginView(APIView):
     permission_classes = [AllowAny]
  
     def post(self, request):
-        email = request.data.get('email', '').strip().lower()
+        email    = request.data.get('email', '').strip().lower()
         password = request.data.get('password', '')
  
-        # Validation minimale
         if not email or not password:
             return Response(
                 {'detail': 'Email et mot de passe requis.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
  
-        # Chercher l'utilisateur par email
         try:
             user = User.objects.select_related('role').get(email=email)
         except User.DoesNotExist:
-            # On n'indique pas si c'est l'email ou le mot de passe qui est faux
-            # (évite l'énumération des comptes — sécurité Phase 7)
             self._record_failure(None, email, request, 'Compte inexistant')
             return Response(
                 {'detail': 'Identifiants incorrects.'},
                 status=status.HTTP_401_UNAUTHORIZED
             )
  
-        # Vérifier le mot de passe
         if not user.check_password(password):
             self._record_failure(user, email, request, 'Mot de passe incorrect')
             return Response(
@@ -71,17 +65,14 @@ class LoginView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED
             )
  
-        # Vérifier que le compte est actif
         if not user.is_active:
             return Response(
                 {'detail': 'Ce compte est désactivé.'},
                 status=status.HTTP_403_FORBIDDEN
             )
  
-        # Générer les tokens JWT
         refresh = RefreshToken.for_user(user)
  
-        # Enregistrer la connexion réussie
         LoginHistory.objects.create(
             user=user,
             login_date=timezone.now(),
@@ -89,35 +80,116 @@ class LoginView(APIView):
             browser=request.META.get('HTTP_USER_AGENT', '')[:255],
             success=True,
         )
-        log_action(user, AuditLog.ActionType.LOGIN, f'Connexion réussie ({user.email})', request)
+        log_action(
+            user, AuditLog.ActionType.LOGIN,
+            f'Connexion réussie ({user.email})', request
+        )
  
         return Response({
-            'access': str(refresh.access_token),
+            'access':  str(refresh.access_token),
             'refresh': str(refresh),
-            'user': UserSerializer(user).data,
+            'user':    UserSerializer(user).data,
         }, status=status.HTTP_200_OK)
  
     def _record_failure(self, user, email, request, reason):
-        """Enregistre un échec de connexion dans login_history et audit_logs."""
+        """
+        Enregistre un échec de connexion.
+        Détecte automatiquement les anomalies (brute force)
+        et crée une alerte sécurité si nécessaire.
+        """
+        ip = request.META.get('REMOTE_ADDR', '')
+ 
+        # 1. Enregistrer l'échec dans login_history
         if user:
             LoginHistory.objects.create(
                 user=user,
                 login_date=timezone.now(),
-                ip_address=request.META.get('REMOTE_ADDR'),
+                ip_address=ip,
                 browser=request.META.get('HTTP_USER_AGENT', '')[:255],
                 success=False,
                 failure_reason=reason,
             )
+ 
+        # 2. Enregistrer dans audit_logs
         log_action(
-            user, AuditLog.ActionType.LOGIN_FAILED,
-            f'Échec de connexion pour {email} : {reason}', request
+            user,
+            AuditLog.ActionType.LOGIN_FAILED,
+            f'Échec connexion pour {email} : {reason}',
+            request
         )
  
+        # ── DÉTECTION D'ANOMALIES ────────────────────────────────────────────
  
-# -----------------------------------------------------------------------
-# POST /api/auth/logout/
-# Blackliste le refresh token — le token devient immédiatement invalide
-# -----------------------------------------------------------------------
+        # Règle 1 — Brute force par IP :
+        # Si la même IP échoue 5 fois en 15 minutes → alerte
+        since_15min = timezone.now() - timedelta(minutes=15)
+        failures_by_ip = LoginHistory.objects.filter(
+            ip_address=ip,
+            success=False,
+            login_date__gte=since_15min
+        ).count()
+ 
+        if failures_by_ip >= 5:
+            AuditLog.objects.create(
+                user=user,
+                action_type=AuditLog.ActionType.SECURITY_ALERT,
+                description=(
+                    f"🚨 Brute force détecté : {failures_by_ip} échecs "
+                    f"en 15 min depuis l'IP {ip} (email ciblé : {email})"
+                ),
+                ip_address=ip,
+                is_suspicious=True,
+            )
+ 
+        # Règle 2 — Attaque sur un compte précis :
+        # Si le même compte échoue 3 fois en 10 minutes → alerte
+        if user:
+            since_10min = timezone.now() - timedelta(minutes=10)
+            failures_by_user = LoginHistory.objects.filter(
+                user=user,
+                success=False,
+                login_date__gte=since_10min
+            ).count()
+ 
+            if failures_by_user >= 3:
+                AuditLog.objects.create(
+                    user=user,
+                    action_type=AuditLog.ActionType.SECURITY_ALERT,
+                    description=(
+                        f"🚨 Tentatives répétées sur le compte {email} : "
+                        f"{failures_by_user} échecs en 10 min depuis {ip}"
+                    ),
+                    ip_address=ip,
+                    is_suspicious=True,
+                )
+ 
+        # Règle 3 — Connexion à une heure inhabituelle :
+        # Entre minuit et 5h du matin → alerte si connexion réussie
+        # (Cette règle s'applique dans la méthode post() de LoginView,
+        #  après une connexion RÉUSSIE. Voir ci-dessous.)
+ 
+ 
+# ─────────────────────────────────────────────────────────────────────────────
+# AJOUTER ce bloc dans la méthode post() de LoginView
+# juste AVANT le return Response final (après la connexion réussie)
+# ─────────────────────────────────────────────────────────────────────────────
+ 
+        # Règle 3 — Connexion à une heure inhabituelle (00h-05h)
+        current_hour = timezone.now().hour
+        if current_hour < 5:
+            AuditLog.objects.create(
+                user=user,
+                action_type=AuditLog.ActionType.SECURITY_ALERT,
+                description=(
+                    f"⚠️ Connexion inhabituelle à {current_hour}h du matin "
+                    f"pour le compte {user.email} depuis {request.META.get('REMOTE_ADDR', '')}"
+                ),
+                ip_address=request.META.get('REMOTE_ADDR', ''),
+                is_suspicious=True,
+            )
+ 
+ 
+ 
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
  
@@ -130,21 +202,22 @@ class LogoutView(APIView):
             )
         try:
             token = RefreshToken(refresh_token)
-            token.blacklist()  # inscrit le token dans la table de blacklist
+            token.blacklist()
         except TokenError:
             return Response(
                 {'detail': 'Token invalide ou déjà expiré.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        log_action(
+            request.user, AuditLog.ActionType.LOGOUT,
+            'Déconnexion', request
+        )
+        return Response(
+            {'detail': 'Déconnexion réussie.'},
+            status=status.HTTP_200_OK
+        )
  
-        log_action(request.user, AuditLog.ActionType.LOGOUT, 'Déconnexion', request)
-        return Response({'detail': 'Déconnexion réussie.'}, status=status.HTTP_200_OK)
  
- 
-# -----------------------------------------------------------------------
-# GET /api/auth/me/
-# Renvoie les infos de l'utilisateur connecté
-# -----------------------------------------------------------------------
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
  
@@ -160,49 +233,85 @@ class MeView(APIView):
             log_action(
                 request.user, AuditLog.ActionType.UPDATE,
                 'Mise à jour du profil', request,
-                target_model='User', target_id=request.user.id
+                'User', request.user.id
             )
             return Response(UserSerializer(request.user).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
  
  
-# -----------------------------------------------------------------------
-# GET  /api/users/          → liste tous les utilisateurs (admin/supervisor)
-# POST /api/users/          → créer un utilisateur (admin seulement)
-# -----------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# GESTION DES UTILISATEURS PAR L'ADMIN
+# ─────────────────────────────────────────────────────────────────────────────
+ 
 class UserListCreateView(APIView):
+    """
+    GET  /api/users/  → liste tous les utilisateurs avec filtres
+    POST /api/users/  → créer un utilisateur (admin seulement)
+ 
+    Paramètres GET disponibles :
+      ?role=AGENT           → filtrer par rôle
+      ?is_active=true       → filtrer par statut
+      ?search=ahmed         → recherche par prénom, nom ou email
+      ?ordering=created_at  → trier par date de création
+    """
     permission_classes = [IsAuthenticated, IsAdminOrSupervisor]
  
     def get(self, request):
-        users = User.objects.select_related('role').all().order_by('-created_at')
-        serializer = UserSerializer(users, many=True)
-        return Response(serializer.data)
+        # Récupérer tous les utilisateurs avec leur rôle
+        queryset = User.objects.select_related('role').all()
+ 
+        # Appliquer les filtres (role, is_active, search)
+        user_filter = UserFilter(request.GET, queryset=queryset)
+        queryset    = user_filter.qs
+ 
+        # Tri : par défaut du plus récent au plus ancien
+        ordering = request.GET.get('ordering', '-created_at')
+        allowed_orderings = [
+            'created_at', '-created_at',
+            'first_name', '-first_name',
+            'email', '-email',
+            'role__name', '-role__name',
+        ]
+        if ordering in allowed_orderings:
+            queryset = queryset.order_by(ordering)
+        else:
+            queryset = queryset.order_by('-created_at')
+ 
+        serializer = UserListSerializer(queryset, many=True)
+        return Response({
+            'count':   queryset.count(),
+            'results': serializer.data,
+        })
  
     def post(self, request):
-        # Seul l'admin peut créer des utilisateurs (pas le superviseur)
-        if not request.user.role.name == 'ADMIN':
+        # Seul l'admin peut créer un utilisateur
+        if request.user.role.name != 'ADMIN':
             return Response(
-                {'detail': 'Seul l\'administrateur peut créer des comptes.'},
+                {'detail': "Seul l'administrateur peut créer des comptes."},
                 status=status.HTTP_403_FORBIDDEN
             )
+ 
         serializer = UserCreateSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
             log_action(
                 request.user, AuditLog.ActionType.CREATE,
-                f'Création du compte {user.email}', request,
-                target_model='User', target_id=user.id
+                f'Création du compte {user.email} (rôle : {user.role.name})',
+                request, 'User', user.id
             )
-            return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
+            return Response(
+                UserListSerializer(user).data,
+                status=status.HTTP_201_CREATED
+            )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
  
  
-# -----------------------------------------------------------------------
-# GET   /api/users/<id>/    → détail d'un utilisateur
-# PATCH /api/users/<id>/    → modifier (admin seulement)
-# DELETE /api/users/<id>/   → désactiver (admin seulement — soft delete)
-# -----------------------------------------------------------------------
 class UserDetailView(APIView):
+    """
+    GET    /api/users/<id>/  → détail d'un utilisateur
+    PATCH  /api/users/<id>/  → modifier nom, email, téléphone, rôle
+    DELETE /api/users/<id>/  → désactiver le compte (soft delete)
+    """
     permission_classes = [IsAuthenticated, IsAdminRole]
  
     def get_object(self, pk):
@@ -214,52 +323,116 @@ class UserDetailView(APIView):
     def get(self, request, pk):
         user = self.get_object(pk)
         if not user:
-            return Response({'detail': 'Utilisateur introuvable.'}, status=status.HTTP_404_NOT_FOUND)
-        return Response(UserSerializer(user).data)
+            return Response(
+                {'detail': 'Utilisateur introuvable.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        return Response(UserListSerializer(user).data)
  
     def patch(self, request, pk):
         user = self.get_object(pk)
         if not user:
-            return Response({'detail': 'Utilisateur introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {'detail': 'Utilisateur introuvable.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+ 
+        # L'admin ne peut pas modifier son propre rôle
+        if user.id == request.user.id and 'role_id' in request.data:
+            return Response(
+                {'detail': "Vous ne pouvez pas modifier votre propre rôle."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+ 
         serializer = UserUpdateSerializer(user, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             log_action(
                 request.user, AuditLog.ActionType.UPDATE,
-                f'Modification du compte {user.email}', request,
-                target_model='User', target_id=user.id
+                f'Modification du compte {user.email}',
+                request, 'User', user.id
             )
-            return Response(UserSerializer(user).data)
+            return Response(UserListSerializer(user).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
  
     def delete(self, request, pk):
-        # SOFT DELETE : on désactive le compte, on ne supprime jamais les données
-        # (exigence CDC fonctionnel 8.1.3 : données conservées même après désactivation)
         user = self.get_object(pk)
         if not user:
-            return Response({'detail': 'Utilisateur introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {'detail': 'Utilisateur introuvable.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+ 
+        # L'admin ne peut pas se désactiver lui-même
+        if user.id == request.user.id:
+            return Response(
+                {'detail': "Vous ne pouvez pas désactiver votre propre compte."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+ 
         user.is_active = False
         user.save(update_fields=['is_active'])
         log_action(
             request.user, AuditLog.ActionType.UPDATE,
-            f'Désactivation du compte {user.email}', request,
-            target_model='User', target_id=user.id
+            f'Désactivation du compte {user.email}',
+            request, 'User', user.id
         )
-        return Response({'detail': 'Compte désactivé.'}, status=status.HTTP_200_OK)
+        return Response(
+            {'detail': f'Compte de {user.first_name} {user.last_name} désactivé.'},
+            status=status.HTTP_200_OK
+        )
  
  
-# -----------------------------------------------------------------------
-# POST /api/users/<id>/reset-password/
-# Réinitialiser le mot de passe d'un utilisateur (admin seulement)
-# -----------------------------------------------------------------------
+class UserActivateView(APIView):
+    """
+    POST /api/users/<id>/activate/
+    Réactiver un compte désactivé (admin seulement).
+    """
+    permission_classes = [IsAuthenticated, IsAdminRole]
+ 
+    def post(self, request, pk):
+        try:
+            user = User.objects.select_related('role').get(pk=pk)
+        except User.DoesNotExist:
+            return Response(
+                {'detail': 'Utilisateur introuvable.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+ 
+        if user.is_active:
+            return Response(
+                {'detail': 'Ce compte est déjà actif.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+ 
+        user.is_active = True
+        user.save(update_fields=['is_active'])
+        log_action(
+            request.user, AuditLog.ActionType.UPDATE,
+            f'Réactivation du compte {user.email}',
+            request, 'User', user.id
+        )
+        return Response(
+            {'detail': f'Compte de {user.first_name} {user.last_name} réactivé.'},
+            status=status.HTTP_200_OK
+        )
+ 
+ 
 class PasswordResetView(APIView):
+    """
+    POST /api/users/<id>/reset-password/
+    Réinitialiser le mot de passe d'un utilisateur (admin seulement).
+    """
     permission_classes = [IsAuthenticated, IsAdminRole]
  
     def post(self, request, pk):
         try:
             user = User.objects.get(pk=pk)
         except User.DoesNotExist:
-            return Response({'detail': 'Utilisateur introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {'detail': 'Utilisateur introuvable.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
  
         serializer = PasswordResetSerializer(data=request.data)
         if serializer.is_valid():
@@ -267,8 +440,8 @@ class PasswordResetView(APIView):
             user.save(update_fields=['password'])
             log_action(
                 request.user, AuditLog.ActionType.UPDATE,
-                f'Réinitialisation du mot de passe de {user.email}', request,
-                target_model='User', target_id=user.id
+                f'Réinitialisation du mot de passe de {user.email}',
+                request, 'User', user.id
             )
-            return Response({'detail': 'Mot de passe réinitialisé.'})
+            return Response({'detail': 'Mot de passe réinitialisé avec succès.'})
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
