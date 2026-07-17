@@ -168,6 +168,15 @@ export const MOCK_AGENTS = [
   { name: 'Salma Idrissi', initials: 'SI', color: '#0f766e', level: 'Niveau 2', handled: 73, avgResolution: '3h 48', slaCompliance: 88, satisfaction: 4.3, activeLoad: 9 },
 ]
 
+// ── Notifications (cloche superviseur) ──────────────────────────────────────
+// GET /api/notifications/?role=supervisor (+ WebSocket pour le temps réel)
+export const MOCK_NOTIFICATIONS = [
+  { id: 1, text: 'Le ticket #00046 a dépassé son SLA critique.', time: 'il y a 12 min', read: false },
+  { id: 2, text: 'Nouvelle escalade reçue — Ahmed Karimi (#00048).', time: 'il y a 38 min', read: false },
+  { id: 3, text: 'Y. Bennani approche de la surcharge (15 tickets actifs).', time: 'il y a 1h', read: false },
+  { id: 4, text: 'Rapport hebdomadaire généré avec succès.', time: 'hier', read: true },
+]
+
 // Cibles possibles de réaffectation (Écran 3.2 / modale)
 export const REASSIGN_TARGETS = [
   { name: 'Ahmed Karimi', initials: 'AK', color: '#1E3A5F', level: 'Agent · Niveau 1', load: 12 },
