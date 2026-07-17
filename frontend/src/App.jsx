@@ -2,7 +2,9 @@ import { useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import LoginPage from './pages/LoginPage'
-import ClientDashboardPage from './pages/ClientDashboardPage'
+import ClientOverviewPage from './pages/ClientOverviewPage'
+import ClientTicketsPage from './pages/ClientTicketsPage'
+import NewTicketPage from './pages/NewTicketPage'
 import AgentDashboardPage from './pages/AgentDashboardPage'
 import AgentTicketPage from './pages/AgentTicketPage'
 import AgentChatPage from './pages/AgentChatPage'
@@ -33,7 +35,7 @@ function App() {
         path="/dashboard"
         element={
           <ProtectedRoute>
-            <ClientDashboardPage />
+            <ClientOverviewPage />
           </ProtectedRoute>
         }
       />
@@ -74,6 +76,22 @@ function App() {
         element={
           <ProtectedRoute>
             <AgentMessagesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/tickets"
+        element={
+          <ProtectedRoute>
+            <ClientTicketsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/tickets/nouveau"
+        element={
+          <ProtectedRoute>
+            <NewTicketPage />
           </ProtectedRoute>
         }
       />
