@@ -11,6 +11,8 @@ import TicketDetailPage from './pages/TicketDetailPage'
 import ProtectedRoute from './routes/ProtectedRoute'
 import { fetchMe } from './store/authSlice'
 import { getAccessToken } from './api/tokenStorage'
+import AgentProfilePage from './pages/AgentProfilePage'
+import AgentStatsPage from './pages/AgentStatsPage'
 
 function App() {
   const dispatch = useDispatch()
@@ -73,6 +75,22 @@ function App() {
         element={
           <ProtectedRoute>
             <TicketDetailPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/agent/profil"
+        element={
+          <ProtectedRoute>
+            <AgentProfilePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/agent/stats"
+        element={
+          <ProtectedRoute>
+            <AgentStatsPage />
           </ProtectedRoute>
         }
       />
