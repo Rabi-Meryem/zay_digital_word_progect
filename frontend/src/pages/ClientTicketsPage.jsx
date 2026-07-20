@@ -1,10 +1,14 @@
 import { useMemo, useState } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
-import { Search, LogOut } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Search, Plus } from 'lucide-react'
+import ClientHeader from '../components/layout/ClientHeader'
 import TicketCard from '../components/tickets/TicketCard'
 import { MOCK_TICKETS } from '../data/mockTickets'
-import { logout } from '../store/authSlice'
 
+// Liste des tickets du client (/tickets).
+// Anciennement ClientDashboardPage : la page /dashboard est désormais le
+// tableau de bord 360°, cette page conserve la recherche et les filtres.
+//
 // ⚠️ Utilise des données de démonstration (src/data/mockTickets.js) en l'absence
 // d'API tickets côté backend pour le moment. À remplacer par un appel réel
 // (ex: GET /api/tickets/) dès que la route existera — voir src/api/authService.js
@@ -29,11 +33,9 @@ function matchesFilter(ticket, filterKey) {
   return true
 }
 
-function ClientDashboardPage() {
+function ClientTicketsPage() {
   const [activeFilter, setActiveFilter] = useState('all')
   const [search, setSearch] = useState('')
-  const user = useSelector((state) => state.auth.user)
-  const dispatch = useDispatch()
 
   const counts = useMemo(
     () => ({
@@ -54,28 +56,21 @@ function ClientDashboardPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="bg-primary text-primary-foreground px-4 sm:px-6 py-4 flex items-center justify-between">
-        <div>
-          <p className="font-semibold text-sm sm:text-base">ZAY Digital World</p>
-          <p className="text-xs text-primary-foreground/70">Portail de support client</p>
-        </div>
-        <div className="flex items-center gap-3 text-sm">
-          <span className="hidden sm:inline">{user?.first_name ?? 'Client'}</span>
-          <button
-            type="button"
-            onClick={() => dispatch(logout())}
-            className="opacity-80 hover:opacity-100"
-            aria-label="Se déconnecter"
-          >
-            <LogOut size={18} />
-          </button>
-        </div>
-      </header>
+      <ClientHeader />
 
       <main className="max-w-2xl mx-auto p-4">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-3 gap-2">
           <h1 className="text-lg font-semibold text-slate-800">Mes tickets</h1>
-          <span className="text-sm text-slate-400">{MOCK_TICKETS.length} tickets</span>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-slate-400">{MOCK_TICKETS.length} tickets</span>
+            <Link
+              to="/tickets/nouveau"
+              className="flex items-center gap-1.5 text-sm font-medium bg-primary text-primary-foreground rounded-lg px-3 py-1.5 hover:opacity-90"
+            >
+              <Plus size={15} />
+              Nouveau
+            </Link>
+          </div>
         </div>
 
         <div className="relative mb-3">
@@ -120,4 +115,4 @@ function ClientDashboardPage() {
   )
 }
 
-export default ClientDashboardPage
+export default ClientTicketsPage
