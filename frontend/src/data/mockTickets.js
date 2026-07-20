@@ -227,3 +227,40 @@ export const MOCK_TICKETS = [
     createdAt: ago(12 * DAY),
   }),
 ]
+
+/**
+ * Ajoute un ticket créé depuis le portail (écran "Nouveau ticket").
+ *
+ * ⚠️ Purement local : le ticket vit en mémoire le temps de la session, comme les
+ * messages et les évaluations de TicketDetailPage. À remplacer par
+ * POST /api/tickets/ dès que la route existera.
+ *
+ * La criticité n'est volontairement pas fournie par le client : le backend la
+ * détermine via le module IA (champs priority / ai_priority / ai_confidence du
+ * modèle Ticket). En attendant, MEDIUM sert de valeur d'attente.
+ */
+export function addMockTicket({ title, description, module_concerne }) {
+  const createdAt = new Date().toISOString()
+  const priority = 'MEDIUM'
+
+  const nextId = Math.max(...MOCK_TICKETS.map((t) => t.id)) + 1
+  const year = new Date().getFullYear()
+  const nextNumber = Math.max(
+    ...MOCK_TICKETS.map((t) => Number(t.ticket_number.split('-').pop()))
+  ) + 1
+
+  const nouveau = ticket({
+    id: nextId,
+    ticket_number: `TK-${year}-${String(nextNumber).padStart(5, '0')}`,
+    title,
+    description,
+    module_concerne,
+    source: 'WEB',
+    priority,
+    current_status: 'OPEN',
+    createdAt,
+  })
+
+  MOCK_TICKETS.unshift(nouveau)
+  return nouveau
+}

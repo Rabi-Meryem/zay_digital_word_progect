@@ -39,10 +39,14 @@ function LoginPage() {
     if (login.fulfilled.match(result)) {
       toast.success('Connexion réussie.')
       // Aiguillage selon le rôle renvoyé par le backend (/auth/login/ → user.role.name) :
-      // un AGENT atterrit sur sa console (Écran 2.1), les autres sur le portail client.
-      // SUPERVISOR et ADMIN iront vers leurs propres espaces quand ils existeront.
+      // AGENT → console agent (2.1), SUPERVISOR → console superviseur (3.x),
+      // tout le reste (CLIENT) → portail client.
       const roleName = result.payload?.role?.name
-      navigate(roleName === 'AGENT' ? '/agent/dashboard' : '/dashboard')
+      const homeByRole = {
+        AGENT: '/agent/dashboard',
+        SUPERVISOR: '/supervisor/dashboard',
+      }
+      navigate(homeByRole[roleName] ?? '/dashboard')
     } else {
       toast.error(result.payload || 'Échec de la connexion.')
     }

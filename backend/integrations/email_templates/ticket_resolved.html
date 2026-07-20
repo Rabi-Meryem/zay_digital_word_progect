@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; background:#f4f4f4; padding:20px;">
+<div style="background:white;padding:30px;border-radius:8px;max-width:600px;margin:auto;">
+
+<h2 style="color:#16A34A;">Votre ticket est résolu ✅</h2>
+
+<p>Bonjour <strong>{{ client_name }}</strong>,</p>
+
+<p>Votre ticket <strong>{{ ticket_number }}</strong> a été marqué comme résolu.</p>
+
+<p><strong>Titre :</strong> {{ ticket_title }}</p>
+
+<p>Si votre problème est réellement résolu, vous pouvez clôturer le ticket et laisser une évaluation.</p>
+
+<a href="{{ portal_url }}"
+style="background:#16A34A;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin-top:15px;">
+Voir le ticket
+</a>
+
+<p style="color:#64748B;font-size:12px;margin-top:30px;">
+ZAY Digital World — Support Client
+</p>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; background:#f4f4f4; padding:20px;">
+  <div style="background:white; padding:30px; border-radius:8px; max-width:600px; margin:auto;">
+    <h2 style="color:#1E2761;">Votre ticket est pris en charge 👨‍💻</h2>
+
+    <p>Bonjour <strong>{{ client_name }}</strong>,</p>
+
+    <p>Votre ticket <strong>{{ ticket_number }}</strong> a été affecté à un agent.</p>
+
+    <p><strong>Titre :</strong> {{ ticket_title }}</p>
+
+    <p><strong>Agent :</strong> {{ agent_name }}</p>
+
+    <p>Notre équipe travaille actuellement sur votre demande.</p>
+
+    <a href="{{ portal_url }}"
+       style="background:#2563EB;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin-top:15px;">
+        Consulter mon ticket
+    </a>
+
+    <p style="color:#64748B;font-size:12px;margin-top:30px;">
+        ZAY Digital World — Support Client
+    </p>
+  </div>
+</body>
+</html>
