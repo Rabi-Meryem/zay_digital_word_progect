@@ -45,7 +45,9 @@ function LoginPage() {
       const homeByRole = {
         AGENT: '/agent/dashboard',
         SUPERVISOR: '/supervisor/dashboard',
+        ADMIN: '/admin/utilisateurs',
       }
+      
       navigate(homeByRole[roleName] ?? '/dashboard')
     } else {
       toast.error(result.payload || 'Échec de la connexion.')
