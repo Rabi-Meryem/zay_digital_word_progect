@@ -5,7 +5,7 @@ from users.views import (
     UserListCreateView, UserDetailView,
     UserActivateView, PasswordResetView
 )
- 
+from users.views_agents import AgentListView, AgentAvailabilityUpdateView
 urlpatterns = [
  
     # ── Authentification ────────────────────────────────────────────────────
@@ -37,5 +37,7 @@ urlpatterns = [
     path('users/<int:pk>/reset-password/',
          PasswordResetView.as_view(),
          name='password-reset'),
+     path('agents/', AgentListView.as_view(), name='agent-list'),
+     path('agents/<int:agent_id>/availability/', AgentAvailabilityUpdateView.as_view(), name='agent-availability-update'),
 ]
  

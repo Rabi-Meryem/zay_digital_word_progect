@@ -82,6 +82,8 @@ class Ticket(models.Model):
     priority = models.CharField(
         max_length=20,
         choices=Priority.choices,
+         null=True,    # ← autorise NULL en base pendant que superviseur/IA n'a pas encore défini
+        blank=True,
     )
 
     ai_priority = models.CharField(

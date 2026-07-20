@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ArrowUpRight, AlertTriangle, X } from 'lucide-react'
+import { escalateTicket } from '../../api/tickets'
 
 // Écran 2.4 — Fenêtre contextuelle d'escalade institutionnelle.
 // Côté backend, le modèle Escalation attend { escalation_type: 'MANUAL',
@@ -19,10 +20,21 @@ function EscalationModal({ ticket, onClose, onConfirm }) {
 
   const shortNumber = ticket.ticket_number.split('-').pop()
 
-  const confirm = () => {
-    const reasonLabel = REASONS.find((r) => r.key === reason)?.title
+ 
+const confirm = async () => {
+  if (!reason) return
+  const reasonLabel  = REASONS.find((r) => r.key === reason)?.title
+  // On combine la raison choisie + le contexte écrit → champ "reason" du backend
+  const fullReason   = `${reasonLabel} — ${context.trim()}`
+
+  try {
+    await escalateTicket(ticket.id, fullReason)
     onConfirm({ reason, reasonLabel, context: context.trim() })
+  } catch (error) {
+    console.error('Erreur escalade:', error)
+    // Afficher l'erreur à l'utilisateur si besoin
   }
+}
 
   return (
     <div

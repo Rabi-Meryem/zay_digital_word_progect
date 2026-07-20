@@ -1,11 +1,11 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
   LayoutDashboard, ArrowUpCircle, AlarmClock, Users, FileText,
-  Bell, LogOut, Download, ArrowLeftRight, Layers, Lock,
-  MessageCircle, Clock, AlertTriangle, CheckCircle2, User, Building2, X, Check, Send,
+  Bell, LogOut, Download, ArrowLeftRight, Clock, AlertTriangle,
+  CheckCircle2, User, X, Check,
 } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -15,16 +15,18 @@ import PriorityBadge from '../../components/tickets/PriorityBadge'
 import StatusBadge from '../../components/tickets/StatusBadge'
 import SlaBar from '../../components/tickets/SlaBar'
 import { getSlaInfo } from '../../utils/sla'
+import { agentColor, initialsFromName } from '../../utils/agentDisplay'
 import { logout } from '../../store/authSlice'
 import {
-  MOCK_KPIS, MOCK_VOLUME, MOCK_STATUS, MOCK_AI_CLASS, MOCK_AI_CONF, MOCK_AI_CONF_AVG,
-  MOCK_ESCALATIONS, MOCK_SLA_TICKETS, MOCK_AGENTS, REASSIGN_TARGETS, MOCK_NOTIFICATIONS,
-} from '../../data/mockSupervisor'
+  fetchSupervisorKpis, fetchSupervisorVolume, fetchStatusDistribution,
+  fetchAiClassification, fetchSlaTickets, fetchAgentsPerformance,
+  fetchAgents, fetchEscalations, takeEscalation, reassignEscalation, sendBackEscalation,
+} from '../../api/supervisor'
+import { downloadReport } from '../../api/reports'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Espace Superviseur — Écrans 3.x (Vue d'ensemble, Escalades, Supervision SLA,
-// Performance équipe, Rapports). Vue frontend seule : les données viennent de
-// mockSupervisor.js (à remplacer par les routes API quand elles existeront).
+// Performance équipe, Rapports). Branché sur les vraies routes API backend.
 // Charte projet : primary #1E3A5F, secondary #2D6A9F, accent #E8A020.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -34,12 +36,33 @@ const COLORS = {
 }
 const AI_COLORS = [COLORS.danger, COLORS.accent, COLORS.secondary, COLORS.slate]
 
-const REASON_STYLES = {
-  ACCESS: { className: 'text-primary border-primary/30', Icon: Lock },
-  COMPETENCE: { className: 'text-secondary border-secondary/40', Icon: Layers },
-  SLA_RISK: { className: 'text-danger border-danger/40', Icon: Clock },
-  CLIENT: { className: 'text-accent border-accent/50', Icon: MessageCircle },
-}
+// Module IA pas encore actif — reste en données de démonstration.
+const MOCK_AI_CONF = [
+  { label: 'Classification Critique', value: 96 },
+  { label: 'Classification Haute', value: 89 },
+  { label: 'Classification Moyenne', value: 85 },
+  { label: 'Classification Basse', value: 91 },
+]
+const MOCK_AI_CONF_AVG = 90.3
+
+const PRIORITIES = [
+  { value: '', label: 'Toutes les priorités' },
+  { value: 'CRITICAL', label: 'Critique' },
+  { value: 'HIGH', label: 'Haute' },
+  { value: 'MEDIUM', label: 'Moyenne' },
+  { value: 'LOW', label: 'Basse' },
+]
+
+const STATUSES = [
+  { value: '', label: 'Tous les statuts' },
+  { value: 'OPEN', label: 'Ouvert' },
+  { value: 'ASSIGNED', label: 'Affecté' },
+  { value: 'IN_PROGRESS', label: 'En cours' },
+  { value: 'WAITING', label: 'En attente' },
+  { value: 'ESCALATED', label: 'Escaladé' },
+  { value: 'RESOLVED', label: 'Résolu' },
+  { value: 'CLOSED', label: 'Clôturé' },
+]
 
 const NAV = [
   { key: 'overview', label: "Vue d'ensemble", Icon: LayoutDashboard },
@@ -76,27 +99,18 @@ function SupervisorDashboardPage() {
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const [section, setSection] = useState('overview')
-  const [reassign, setReassign] = useState(null) // { number, title } | null
+  const [reassign, setReassign] = useState(null) // { id, number, title } | null
+  const [pendingEsc, setPendingEsc] = useState(0)
+  const [slaBreachedCount, setSlaBreachedCount] = useState(0)
 
-  // Notifications — état partagé au niveau de la page pour rester cohérent
-  // quelle que soit la section active. À remplacer par GET /api/notifications/
-  // (+ WebSocket pour le temps réel) une fois le backend branché.
-  const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS)
-  const markNotifRead = (id) =>
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))
-  const markAllNotifsRead = () =>
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
-  const bellProps = { notifications, onMarkRead: markNotifRead, onMarkAllRead: markAllNotifsRead }
+  const name = user ? `${user.first_name} ${user.last_name ?? ''}`.trim() : ''
+  const initials = name ? initialsFromName(name) : '--'
 
-  const name = user ? `${user.first_name} ${user.last_name ?? ''}`.trim() : 'Karim Said'
-  const initials = name.split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase()
-
-  // Compteur d'escalades en attente (badge sidebar) — calculé depuis les données.
-  const pendingEsc = useMemo(
-    () => MOCK_ESCALATIONS.filter((e) => e.state === 'pending').length,
-    []
-  )
-  const slaBreachedCount = MOCK_KPIS.slaBreached
+  // Badges sidebar — rafraîchis à chaque changement de section
+  useEffect(() => {
+    fetchEscalations('pending').then((list) => setPendingEsc(list.length)).catch(() => {})
+    fetchSupervisorKpis().then((k) => setSlaBreachedCount(k.slaBreached)).catch(() => {})
+  }, [section])
 
   return (
     <div className="min-h-screen bg-slate-50 md:flex">
@@ -172,7 +186,7 @@ function SupervisorDashboardPage() {
         </button>
       </header>
 
-      {/* ── Onglets mobile (la sidebar est masquée) ─────────────────────── */}
+      {/* ── Onglets mobile ───────────────────────────────────────────────── */}
       <div className="md:hidden flex gap-1 overflow-x-auto px-3 py-2 bg-white border-b border-slate-200">
         {NAV.map(({ key, label }) => (
           <button
@@ -190,11 +204,11 @@ function SupervisorDashboardPage() {
 
       {/* ── Contenu ─────────────────────────────────────────────────────── */}
       <main className="flex-1 min-w-0 p-4 sm:p-6">
-        {section === 'overview' && <Overview {...bellProps} />}
-        {section === 'escalations' && <Escalations onReassign={setReassign} {...bellProps} />}
-        {section === 'sla' && <SlaSupervision onReassign={setReassign} {...bellProps} />}
+        {section === 'overview' && <Overview />}
+        {section === 'escalations' && <Escalations onReassign={setReassign} />}
+        {section === 'sla' && <SlaSupervision onReassign={setReassign} />}
         {section === 'team' && <Team />}
-        {section === 'reports' && <Reports {...bellProps} />}
+        {section === 'reports' && <Reports />}
       </main>
 
       {reassign && <ReassignModal ticket={reassign} onClose={() => setReassign(null)} />}
@@ -202,7 +216,7 @@ function SupervisorDashboardPage() {
   )
 }
 
-/* ════════════════ SECTION 1 — VUE D'ENSEMBLE ════════════════ */
+/* ════════════════ COMPOSANTS PARTAGÉS ════════════════ */
 function TopBar({ title, desc, children }) {
   return (
     <div className="flex items-start justify-between gap-3 mb-5">
@@ -215,70 +229,20 @@ function TopBar({ title, desc, children }) {
   )
 }
 
-function NotificationBell({ notifications = [], onMarkRead, onMarkAllRead }) {
-  const [open, setOpen] = useState(false)
-  const unread = notifications.filter((n) => !n.read).length
-
+function BellButton() {
   return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="relative text-slate-500 hover:text-slate-700"
-        aria-label="Notifications"
-      >
-        <Bell size={19} />
-        {unread > 0 && <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-danger" />}
-      </button>
-
-      {open && (
-        <>
-          {/* Fond invisible pour fermer le panneau au clic extérieur */}
-          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 mt-2 w-80 max-w-[90vw] bg-white border border-slate-200 rounded-xl shadow-lg z-30 overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-              <p className="text-sm font-semibold text-slate-700">
-                Notifications{unread > 0 && ` (${unread})`}
-              </p>
-              {unread > 0 && (
-                <button
-                  type="button"
-                  onClick={onMarkAllRead}
-                  className="text-xs font-medium text-secondary hover:underline"
-                >
-                  Tout marquer comme lu
-                </button>
-              )}
-            </div>
-            <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
-              {notifications.length === 0 && (
-                <p className="px-4 py-6 text-center text-sm text-slate-400">Aucune notification.</p>
-              )}
-              {notifications.map((n) => (
-                <button
-                  key={n.id}
-                  type="button"
-                  onClick={() => onMarkRead(n.id)}
-                  className={`w-full text-left px-4 py-3 hover:bg-slate-50 ${!n.read ? 'bg-secondary/5' : ''}`}
-                >
-                  <p className="text-sm text-slate-700 leading-snug">{n.text}</p>
-                  <p className="text-xs text-slate-400 mt-1">{n.time}</p>
-                </button>
-              ))}
-            </div>
-          </div>
-        </>
-      )}
-    </div>
+    <button type="button" className="relative text-slate-500 hover:text-slate-700" aria-label="Notifications">
+      <Bell size={19} />
+      <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-danger" />
+    </button>
   )
 }
 
-function Kpi({ label, value, warn, trend }) {
+function Kpi({ label, value, warn }) {
   return (
     <div className="bg-white border border-slate-200 rounded-xl px-4 py-3">
       <p className="text-xs text-slate-500">{label}</p>
       <p className={`text-2xl font-bold mt-1 ${warn ? 'text-danger' : 'text-slate-800'}`}>{value}</p>
-      {trend && <p className="text-[11px] text-slate-400 mt-1">{trend}</p>}
     </div>
   )
 }
@@ -300,127 +264,17 @@ function Card({ title, hint, right, children, className = '' }) {
   )
 }
 
-function Overview({ notifications, onMarkRead, onMarkAllRead }) {
-  const k = MOCK_KPIS
-  const exportPdf = () => {
-    // TODO API : GET /api/supervisor/reports/export/?format=pdf&section=overview
-    toast.success("Export PDF de la vue d'ensemble généré (simulation)")
-  }
+function MiniStat({ Icon, tint, value, label, valueColor }) {
   return (
-    <>
-      <TopBar title="Vue d'ensemble" desc="Indicateurs de performance de la plateforme">
-        <button
-          type="button"
-          onClick={exportPdf}
-          className="hidden sm:flex items-center gap-1.5 text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50"
-        >
-          <Download size={14} /> Export PDF
-        </button>
-        <NotificationBell notifications={notifications} onMarkRead={onMarkRead} onMarkAllRead={onMarkAllRead} />
-      </TopBar>
-
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-5">
-        <Kpi label="Total tickets" value={k.total.toLocaleString('fr-FR')} trend="▲ 6,2% ce mois" />
-        <Kpi label="Ouverts" value={k.open} />
-        <Kpi label="En cours" value={k.inProgress} />
-        <Kpi label="Résolus" value={k.resolved} />
-        <Kpi label="Critiques actifs" value={k.criticalActive} warn />
-        <Kpi label="SLA non respecté" value={k.slaBreached} warn />
+    <div className="bg-white border border-slate-200 rounded-xl px-4 py-3.5 flex items-center gap-3">
+      <span className="h-10 w-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: tint.bg, color: tint.fg }}>
+        <Icon size={20} />
+      </span>
+      <div>
+        <p className="text-xl font-bold leading-none" style={{ color: valueColor }}>{value}</p>
+        <p className="text-xs text-slate-500 mt-0.5">{label}</p>
       </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-        <Card title="Volume de tickets" hint="7 derniers jours · créés vs résolus">
-          <ResponsiveContainer width="100%" height={180}>
-            <LineChart data={MOCK_VOLUME} margin={{ top: 5, right: 8, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" vertical={false} />
-              <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-              <Tooltip />
-              <Line type="monotone" dataKey="crees" name="Créés" stroke={COLORS.secondary} strokeWidth={2.5} dot={false} />
-              <Line type="monotone" dataKey="resolus" name="Résolus" stroke={COLORS.success} strokeWidth={2.5} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-          <div className="flex gap-4 justify-center text-xs text-slate-500 mt-1">
-            <span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm inline-block" style={{ background: COLORS.secondary }} />Créés</span>
-            <span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm inline-block" style={{ background: COLORS.success }} />Résolus</span>
-          </div>
-        </Card>
-
-        <Card title="Répartition par statut" hint="tickets actifs">
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={MOCK_STATUS} margin={{ top: 15, right: 8, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-              <Tooltip cursor={{ fill: '#f8fafc' }} />
-              <Bar dataKey="value" radius={[5, 5, 0, 0]}>
-                <Cell fill="#94a3b8" /><Cell fill={COLORS.secondary} /><Cell fill={COLORS.success} />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-
-        <Card title="Classification IA" hint="par criticité">
-          <div className="flex items-center gap-3">
-            <ResponsiveContainer width="55%" height={160}>
-              <PieChart>
-                <Pie data={MOCK_AI_CLASS} dataKey="value" nameKey="name" innerRadius={40} outerRadius={62} paddingAngle={2} stroke="none">
-                  {MOCK_AI_CLASS.map((e, i) => <Cell key={i} fill={AI_COLORS[i]} />)}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="flex-1 space-y-1.5 text-xs text-slate-600">
-              {MOCK_AI_CLASS.map((e, i) => (
-                <div key={e.name} className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-sm" style={{ background: AI_COLORS[i] }} />
-                  {e.name}<span className="ml-auto font-semibold text-slate-700">{e.value}%</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card title="Conformité SLA">
-          <div className="flex items-center gap-6">
-            <Gauge value={k.slaCompliance} />
-            <div className="flex-1 space-y-3">
-              <div className="flex items-center justify-between">
-                <div><p className="text-2xl font-bold text-accent">20</p><p className="text-xs text-slate-400">tickets à risque</p></div>
-                <AlertTriangle size={24} className="text-accent" />
-              </div>
-              <div className="border-t border-slate-100" />
-              <div className="flex items-center justify-between">
-                <div><p className="text-2xl font-bold text-danger">{k.slaBreached}</p><p className="text-xs text-slate-400">en dépassement</p></div>
-                <Clock size={24} className="text-danger" />
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        <Card title="Insights IA" hint="fiabilité du module de classification"
-          right={<span className="text-xs font-semibold px-2 py-0.5 rounded bg-secondary/10 text-secondary">Mistral 7B · fallback</span>}>
-          {MOCK_AI_CONF.map((r) => (
-            <div key={r.label} className="flex items-center justify-between text-sm py-2 border-b border-slate-100 last:border-0">
-              <span className="text-slate-600">{r.label}</span>
-              <span className="font-semibold text-slate-700">{r.value}%</span>
-            </div>
-          ))}
-          <div className="mt-3 bg-slate-50 rounded-lg px-3 py-2.5">
-            <div className="flex justify-between text-xs text-slate-600">
-              <span>Score de confiance moyen</span>
-              <span className="font-bold text-success">{MOCK_AI_CONF_AVG}%</span>
-            </div>
-            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden mt-1.5">
-              <div className="h-full bg-success rounded-full" style={{ width: `${MOCK_AI_CONF_AVG}%` }} />
-            </div>
-            <p className="text-xs text-slate-400 mt-1.5">Sous le seuil (~90%), le ticket est repassé au LLM local pour arbitrage.</p>
-          </div>
-        </Card>
-      </div>
-    </>
+    </div>
   )
 }
 
@@ -439,52 +293,194 @@ function Gauge({ value }) {
   )
 }
 
-/* ════════════════ SECTION 2 — ESCALADES ════════════════ */
-function ReasonChip({ reason }) {
-  const s = REASON_STYLES[reason.key] ?? REASON_STYLES.ACCESS
-  const { Icon } = s
+/* ════════════════ SECTION 1 — VUE D'ENSEMBLE ════════════════ */
+function Overview() {
+  const [k, setK] = useState(null)
+  const [volume, setVolume] = useState([])
+  const [statusDist, setStatusDist] = useState([])
+  const [aiClass, setAiClass] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let mounted = true
+    Promise.all([
+      fetchSupervisorKpis(), fetchSupervisorVolume(),
+      fetchStatusDistribution(), fetchAiClassification(),
+    ])
+      .then(([kpis, vol, dist, ai]) => {
+        if (!mounted) return
+        setK(kpis); setVolume(vol); setStatusDist(dist); setAiClass(ai)
+      })
+      .catch(() => toast.error("Impossible de charger la vue d'ensemble."))
+      .finally(() => mounted && setLoading(false))
+    return () => { mounted = false }
+  }, [])
+
+  if (loading || !k) return <div className="p-6 text-slate-400 text-sm">Chargement...</div>
+
   return (
-    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border bg-white ${s.className}`}>
-      <Icon size={11} />{reason.label}
-    </span>
+    <>
+      <TopBar title="Vue d'ensemble" desc="Indicateurs de performance de la plateforme">
+        <BellButton />
+      </TopBar>
+
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-5">
+        <Kpi label="Total tickets" value={k.total.toLocaleString('fr-FR')} />
+        <Kpi label="Ouverts" value={k.open} />
+        <Kpi label="En cours" value={k.inProgress} />
+        <Kpi label="Résolus" value={k.resolved} />
+        <Kpi label="Critiques actifs" value={k.criticalActive} warn />
+        <Kpi label="SLA non respecté" value={k.slaBreached} warn />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+        <Card title="Volume de tickets" hint="7 derniers jours · créés vs résolus">
+          <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={volume} margin={{ top: 5, right: 8, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" vertical={false} />
+              <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+              <Tooltip />
+              <Line type="monotone" dataKey="crees" name="Créés" stroke={COLORS.secondary} strokeWidth={2.5} dot={false} />
+              <Line type="monotone" dataKey="resolus" name="Résolus" stroke={COLORS.success} strokeWidth={2.5} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+          <div className="flex gap-4 justify-center text-xs text-slate-500 mt-1">
+            <span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm inline-block" style={{ background: COLORS.secondary }} />Créés</span>
+            <span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm inline-block" style={{ background: COLORS.success }} />Résolus</span>
+          </div>
+        </Card>
+
+        <Card title="Répartition par statut" hint="tickets actifs">
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={statusDist} margin={{ top: 15, right: 8, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+              <Tooltip cursor={{ fill: '#f8fafc' }} />
+              <Bar dataKey="value" radius={[5, 5, 0, 0]}>
+                <Cell fill="#94a3b8" /><Cell fill={COLORS.secondary} /><Cell fill={COLORS.success} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+
+        <Card title="Classification IA" hint="par criticité">
+          {aiClass.length === 0 ? (
+            <p className="text-xs text-slate-400 py-8 text-center">
+              Module IA pas encore actif — aucune classification disponible.
+            </p>
+          ) : (
+            <div className="flex items-center gap-3">
+              <ResponsiveContainer width="55%" height={160}>
+                <PieChart>
+                  <Pie data={aiClass} dataKey="value" nameKey="name" innerRadius={40} outerRadius={62} paddingAngle={2} stroke="none">
+                    {aiClass.map((e, i) => <Cell key={i} fill={AI_COLORS[i % AI_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex-1 space-y-1.5 text-xs text-slate-600">
+                {aiClass.map((e, i) => (
+                  <div key={e.name} className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-sm" style={{ background: AI_COLORS[i % AI_COLORS.length] }} />
+                    {e.name}<span className="ml-auto font-semibold text-slate-700">{e.value}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card title="Conformité SLA">
+          <div className="flex items-center gap-6">
+            <Gauge value={k.slaCompliance} />
+            <div className="flex-1 space-y-3">
+              <div className="flex items-center justify-between">
+                <div><p className="text-2xl font-bold text-danger">{k.slaBreached}</p><p className="text-xs text-slate-400">en dépassement</p></div>
+                <Clock size={24} className="text-danger" />
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        {/* Reste en données de démonstration — module IA non branché */}
+        <Card title="Insights IA" hint="fiabilité du module de classification (données démo)"
+          right={<span className="text-xs font-semibold px-2 py-0.5 rounded bg-secondary/10 text-secondary">Mistral 7B · fallback</span>}>
+          {MOCK_AI_CONF.map((r) => (
+            <div key={r.label} className="flex items-center justify-between text-sm py-2 border-b border-slate-100 last:border-0">
+              <span className="text-slate-600">{r.label}</span>
+              <span className="font-semibold text-slate-700">{r.value}%</span>
+            </div>
+          ))}
+          <div className="mt-3 bg-slate-50 rounded-lg px-3 py-2.5">
+            <div className="flex justify-between text-xs text-slate-600">
+              <span>Score de confiance moyen</span>
+              <span className="font-bold text-success">{MOCK_AI_CONF_AVG}%</span>
+            </div>
+            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden mt-1.5">
+              <div className="h-full bg-success rounded-full" style={{ width: `${MOCK_AI_CONF_AVG}%` }} />
+            </div>
+          </div>
+        </Card>
+      </div>
+    </>
   )
 }
 
-function Escalations({ onReassign, notifications, onMarkRead, onMarkAllRead }) {
+/* ════════════════ SECTION 2 — ESCALADES ════════════════ */
+function Escalations({ onReassign }) {
   const [filter, setFilter] = useState('all')
-  const [escalations, setEscalations] = useState(MOCK_ESCALATIONS)
-  const [viewing, setViewing] = useState(null) // escalation en cours de consultation | null
+  const [list, setList] = useState([])
+  const [loading, setLoading] = useState(true)
 
-  const list = escalations.filter((e) =>
-    filter === 'all' ? true : filter === 'pending' ? e.state === 'pending' : e.state === 'taken'
-  )
-  const nPending = escalations.filter((e) => e.state === 'pending').length
-  const nTaken = escalations.filter((e) => e.state === 'taken').length
+  const load = () => {
+    setLoading(true)
+    fetchEscalations(filter)
+      .then(setList)
+      .catch(() => toast.error("Impossible de charger les escalades."))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(load, [filter])
+
+  const nPending = list.filter((e) => !e.resolved).length
+  const nTaken = list.filter((e) => e.resolved).length
 
   const CHIPS = [
-    { key: 'all', label: `Toutes (${escalations.length})` },
+    { key: 'all', label: `Toutes (${list.length})` },
     { key: 'pending', label: `En attente (${nPending})` },
     { key: 'taken', label: `Prises en charge (${nTaken})` },
   ]
 
-  // TODO API : POST /api/escalations/{id}/take/
-  const takeCharge = (e) => {
-    setEscalations((prev) =>
-      prev.map((x) => (x.id === e.id ? { ...x, state: 'taken', takenNote: 'Pris en charge par vous à l’instant' } : x))
-    )
-    toast.success(`Ticket ${e.number} pris en charge (simulation)`)
+  async function handleTake(id) {
+    try {
+      await takeEscalation(id)
+      toast.success('Escalade prise en charge.')
+      load()
+    } catch {
+      toast.error("Échec de la prise en charge.")
+    }
   }
 
-  // TODO API : POST /api/escalations/{id}/send-back/
-  const sendBack = (e) => {
-    setEscalations((prev) => prev.filter((x) => x.id !== e.id))
-    toast.success(`Ticket ${e.number} renvoyé à ${e.escalatedBy.name} (simulation)`)
+  async function handleSendBack(id) {
+    try {
+      await sendBackEscalation(id)
+      toast.success("Ticket renvoyé à l'agent.")
+      load()
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Échec de l'action.")
+    }
   }
+
+  if (loading) return <div className="p-6 text-slate-400 text-sm">Chargement...</div>
 
   return (
     <>
-      <TopBar title="Escalades reçues" desc="Tickets transmis par les agents de Niveau 1 · à qualifier et affecter">
-        <NotificationBell notifications={notifications} onMarkRead={onMarkRead} onMarkAllRead={onMarkAllRead} />
+      <TopBar title="Escalades reçues" desc="Tickets transmis par les agents · à qualifier et affecter">
+        <BellButton />
       </TopBar>
 
       <div className="flex gap-2 mb-4 flex-wrap">
@@ -498,6 +494,10 @@ function Escalations({ onReassign, notifications, onMarkRead, onMarkAllRead }) {
         ))}
       </div>
 
+      {list.length === 0 && (
+        <p className="text-sm text-slate-400 py-10 text-center">Aucune escalade pour ce filtre.</p>
+      )}
+
       <div className="space-y-3.5 max-w-4xl">
         {list.map((e) => {
           const border = e.priority === 'CRITICAL' ? 'border-l-danger' : e.priority === 'HIGH' ? 'border-l-accent' : 'border-l-slate-200'
@@ -505,60 +505,60 @@ function Escalations({ onReassign, notifications, onMarkRead, onMarkAllRead }) {
             <div key={e.id} className={`bg-white border border-slate-200 border-l-[3px] ${border} rounded-xl p-4`}>
               <div className="flex justify-between gap-3">
                 <div>
-                  <p className="text-xs text-slate-400">{e.number} · {e.date}</p>
-                  <p className="font-semibold text-slate-800 mt-0.5">{e.title}</p>
-                  {/* identité client masquée */}
+
+                  <p className="text-xs text-slate-400">{e.ticket_number} · {new Date(e.escalation_date).toLocaleDateString('fr-FR')}</p>
+                  <p className="font-semibold text-slate-800 mt-0.5">{e.ticket_title}</p>
+                  <p className="flex items-center gap-1.5 text-xs text-slate-500 mt-1"><User size={12} />{e.client_name}</p>
+                    (feat(supervisor): dashboard superviseur complet + SLA, escalades, notifications, rapports)
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
                   <PriorityBadge priority={e.priority} />
-                  {e.state === 'taken'
+                  {e.resolved
                     ? <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-success/10 text-success whitespace-nowrap">Pris en charge</span>
                     : <StatusBadge status="ESCALATED" />}
                 </div>
               </div>
 
               <div className="flex items-center gap-2 flex-wrap mt-3">
-                <span className="flex items-center gap-1.5 text-xs text-slate-500">
-                  <Avatar initials={e.escalatedBy.initials} color={e.escalatedBy.color} size={22} />
-                  Escaladé par {e.escalatedBy.name}
+                {e.escalated_by && (
+                  <span className="flex items-center gap-1.5 text-xs text-slate-500">
+                    <Avatar initials={initialsFromName(e.escalated_by.full_name)} color={agentColor(e.escalated_by.id)} size={22} />
+                    Escaladé par {e.escalated_by.full_name}
+                  </span>
+                )}
+                <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border bg-white ${
+                  e.escalation_type === 'AUTO' ? 'text-danger border-danger/40' : 'text-secondary border-secondary/40'
+                }`}>
+                  {e.escalation_type === 'AUTO' ? 'Automatique · Risque SLA' : 'Manuelle'}
                 </span>
-                <ReasonChip reason={e.reason} />
-                {e.takenNote && <span className="text-xs text-slate-400">· {e.takenNote}</span>}
               </div>
 
-              <div className="mt-3"><SlaBar createdAt={e.createdAt} slaDeadline={e.slaDeadline} priority={e.priority} /></div>
+              <div className="mt-3"><SlaBar createdAt={e.ticket_created_at} slaDeadline={e.sla_deadline} priority={e.priority} /></div>
 
               <p className="mt-3 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs text-slate-600 italic leading-relaxed">
-                « {e.context} »
+                « {e.reason} »
               </p>
 
               <div className="flex gap-2 mt-3 flex-wrap">
-                {e.state === 'pending' ? (
+                {!e.resolved ? (
                   <>
-                    <button type="button" onClick={() => takeCharge(e)}
+                    <button type="button" onClick={() => handleTake(e.id)}
                       className="text-xs font-medium bg-primary text-white rounded-lg px-3 py-2 hover:bg-primary/90">Prendre en charge</button>
-                    <button type="button" onClick={() => onReassign({ number: e.number, title: e.title })}
+                    <button type="button" onClick={() => onReassign({ id: e.id, number: e.ticket_number, title: e.ticket_title })}
                       className="flex items-center gap-1.5 text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50">
                       <ArrowLeftRight size={14} /> Réaffecter
                     </button>
-                    <button type="button" onClick={() => sendBack(e)}
+                    <button type="button" onClick={() => handleSendBack(e.id)}
                       className="text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50">Renvoyer à l'agent</button>
                   </>
                 ) : (
-                  <>
-                    <button type="button" onClick={() => setViewing(e)}
-                      className="text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50">Ouvrir la fiche</button>
-                    <button type="button" onClick={() => setViewing(e)}
-                      className="text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50">Messages</button>
-                  </>
+                  <button type="button" className="text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50">Ouvrir la fiche</button>
                 )}
               </div>
             </div>
           )
         })}
       </div>
-
-      {viewing && <EscalationDetailModal escalation={viewing} onClose={() => setViewing(null)} />}
     </>
   )
 }
@@ -648,39 +648,38 @@ function EscalationDetailModal({ escalation, onClose }) {
 }
 
 /* ════════════════ SECTION 3 — SUPERVISION SLA ════════════════ */
-function MiniStat({ Icon, tint, value, label, valueColor }) {
-  return (
-    <div className="bg-white border border-slate-200 rounded-xl px-4 py-3.5 flex items-center gap-3">
-      <span className="h-10 w-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: tint.bg, color: tint.fg }}>
-        <Icon size={20} />
-      </span>
-      <div>
-        <p className="text-xl font-bold leading-none" style={{ color: valueColor }}>{value}</p>
-        <p className="text-xs text-slate-500 mt-0.5">{label}</p>
-      </div>
-    </div>
-  )
-}
-
-function SlaSupervision({ onReassign, notifications, onMarkRead, onMarkAllRead }) {
+function SlaSupervision({ onReassign }) {
   const [filter, setFilter] = useState('all')
-  const rows = MOCK_SLA_TICKETS
-    .map((t) => ({ ...t, info: getSlaInfo(t.createdAt, t.slaDeadline, t.priority) }))
-    .filter((t) => (filter === 'all' ? true : filter === 'bad' ? t.info.level === 'breached' : t.info.level !== 'breached'))
-    .sort((a, b) => a.info.remainingMs - b.info.remainingMs)
+  const [rows, setRows] = useState([])
+  const [kpis, setKpis] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    Promise.all([fetchSlaTickets(filter), fetchSupervisorKpis()])
+      .then(([tickets, k]) => {
+        setRows(
+          tickets
+            .map((t) => ({ ...t, info: getSlaInfo(t.createdAt, t.slaDeadline, t.priority) }))
+            .sort((a, b) => a.info.remainingMs - b.info.remainingMs)
+        )
+        setKpis(k)
+      })
+      .catch(() => toast.error("Impossible de charger la supervision SLA."))
+      .finally(() => setLoading(false))
+  }, [filter])
 
   const CHIPS = [{ key: 'all', label: 'Tous' }, { key: 'bad', label: 'Dépassé' }, { key: 'risk', label: 'À risque' }]
 
+  if (loading || !kpis) return <div className="p-6 text-slate-400 text-sm">Chargement...</div>
+
   return (
     <>
-      <TopBar title="Supervision SLA" desc="Surveillance des délais en temps réel · tri par urgence">
-        <NotificationBell notifications={notifications} onMarkRead={onMarkRead} onMarkAllRead={onMarkAllRead} />
-      </TopBar>
+      <TopBar title="Supervision SLA" desc="Surveillance des délais en temps réel · tri par urgence"><BellButton /></TopBar>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-        <MiniStat Icon={AlertTriangle} tint={{ bg: 'rgba(192,57,43,.10)', fg: COLORS.danger }} value={MOCK_KPIS.slaBreached} valueColor={COLORS.danger} label="SLA dépassé" />
-        <MiniStat Icon={Clock} tint={{ bg: 'rgba(232,160,32,.14)', fg: COLORS.accent }} value="20" valueColor={COLORS.accent} label="À risque (< 80%)" />
-        <MiniStat Icon={CheckCircle2} tint={{ bg: 'rgba(39,174,96,.12)', fg: COLORS.success }} value="46" valueColor={COLORS.success} label="Respectés aujourd'hui" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+        <MiniStat Icon={AlertTriangle} tint={{ bg: 'rgba(192,57,43,.10)', fg: COLORS.danger }} value={kpis.slaBreached} valueColor={COLORS.danger} label="SLA dépassé" />
+        <MiniStat Icon={CheckCircle2} tint={{ bg: 'rgba(39,174,96,.12)', fg: COLORS.success }} value={`${kpis.slaCompliance}%`} valueColor={COLORS.success} label="Conformité globale" />
       </div>
 
       <div className="flex gap-2 mb-4">
@@ -692,41 +691,69 @@ function SlaSupervision({ onReassign, notifications, onMarkRead, onMarkAllRead }
         ))}
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-200">
-                <th className="px-4 py-3">Ticket</th><th className="px-4 py-3">Client</th><th className="px-4 py-3">Agent</th>
-                <th className="px-4 py-3">Priorité</th><th className="px-4 py-3 w-1/4">SLA</th><th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((t) => (
-                <tr key={t.number} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                  <td className="px-4 py-3"><p className="font-semibold text-slate-800 text-sm">{t.number}</p><p className="text-xs text-slate-400">{t.title}</p></td>
-                  <td className="px-4 py-3 text-sm text-slate-400">—</td>
-                  <td className="px-4 py-3"><span className="flex items-center gap-2 text-sm text-slate-600"><Avatar initials={t.agent.initials} color={t.agent.color} size={26} />{t.agent.name}</span></td>
-                  <td className="px-4 py-3"><PriorityBadge priority={t.priority} /></td>
-                  <td className="px-4 py-3"><SlaBar createdAt={t.createdAt} slaDeadline={t.slaDeadline} priority={t.priority} /></td>
-                  <td className="px-4 py-3 text-right">
-                    <button type="button" onClick={() => onReassign({ number: t.number, title: t.title })}
-                      className="text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-1.5 hover:bg-slate-50 whitespace-nowrap">Réaffecter</button>
-                  </td>
+
+      {rows.length === 0 && (
+        <p className="text-sm text-slate-400 py-10 text-center">Aucun ticket pour ce filtre.</p>
+      )}
+
+      {rows.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-200">
+                  <th className="px-4 py-3">Ticket</th><th className="px-4 py-3">Client</th><th className="px-4 py-3">Agent</th>
+                  <th className="px-4 py-3">Priorité</th><th className="px-4 py-3 w-1/4">SLA</th><th className="px-4 py-3" />
+            (feat(supervisor): dashboard superviseur complet + SLA, escalades, notifications, rapports)
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.map((t) => (
+                  <tr key={t.number} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                    <td className="px-4 py-3"><p className="font-semibold text-slate-800 text-sm">{t.number}</p><p className="text-xs text-slate-400">{t.title}</p></td>
+                    <td className="px-4 py-3 text-sm text-slate-600">{t.client}</td>
+                    <td className="px-4 py-3">
+                      {t.agent ? (
+                        <span className="flex items-center gap-2 text-sm text-slate-600">
+                          <Avatar initials={t.agent.initials} color={COLORS.secondary} size={26} />{t.agent.name}
+                        </span>
+                      ) : <span className="text-xs text-slate-400">Non assigné</span>}
+                    </td>
+                    <td className="px-4 py-3"><PriorityBadge priority={t.priority} /></td>
+                    <td className="px-4 py-3"><SlaBar createdAt={t.createdAt} slaDeadline={t.slaDeadline} priority={t.priority} /></td>
+                    <td className="px-4 py-3 text-right">
+                      <button type="button" onClick={() => onReassign({ number: t.number, title: t.title })}
+                        className="text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-1.5 hover:bg-slate-50 whitespace-nowrap">Réaffecter</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
     </>
   )
 }
 
 /* ════════════════ SECTION 4 — PERFORMANCE ÉQUIPE ════════════════ */
 function Team() {
-  const chargeData = MOCK_AGENTS.map((a) => ({ name: a.initials, load: a.activeLoad }))
-  const avgSat = (MOCK_AGENTS.reduce((s, a) => s + a.satisfaction, 0) / MOCK_AGENTS.length).toFixed(1)
+  const [agents, setAgents] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchAgentsPerformance()
+      .then(setAgents)
+      .catch(() => toast.error("Impossible de charger la performance équipe."))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) return <div className="p-6 text-slate-400 text-sm">Chargement...</div>
+
+  const chargeData = agents.map((a) => ({ name: a.initials, load: a.activeLoad }))
+  const avgSat = agents.length
+    ? (agents.reduce((s, a) => s + a.satisfaction, 0) / agents.length).toFixed(1)
+    : '0.0'
 
   return (
     <>
@@ -744,8 +771,7 @@ function Team() {
       </TopBar>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-        <MiniStat Icon={Users} tint={{ bg: 'rgba(45,106,159,.10)', fg: COLORS.secondary }} value={MOCK_AGENTS.length} valueColor="#1e293b" label="Agents actifs" />
-        <MiniStat Icon={Clock} tint={{ bg: 'rgba(232,160,32,.14)', fg: COLORS.accent }} value="4h 11" valueColor="#1e293b" label="Temps moyen résolution" />
+        <MiniStat Icon={Users} tint={{ bg: 'rgba(45,106,159,.10)', fg: COLORS.secondary }} value={agents.length} valueColor="#1e293b" label="Agents actifs" />
         <MiniStat Icon={CheckCircle2} tint={{ bg: 'rgba(39,174,96,.12)', fg: COLORS.success }} value={`${avgSat}/5`} valueColor="#1e293b" label="Satisfaction moyenne" />
       </div>
 
@@ -762,7 +788,6 @@ function Team() {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-          <p className="text-xs text-slate-400 text-center mt-1">Y. Bennani proche de la surcharge (15 tickets).</p>
         </Card>
 
         <div className="lg:col-span-3 bg-white border border-slate-200 rounded-xl overflow-hidden">
@@ -775,12 +800,12 @@ function Team() {
                 </tr>
               </thead>
               <tbody>
-                {MOCK_AGENTS.map((a) => (
-                  <tr key={a.name} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                {agents.map((a) => (
+                  <tr key={a.agent_id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
                     <td className="px-4 py-3">
                       <span className="flex items-center gap-2.5">
-                        <Avatar initials={a.initials} color={a.color} size={30} />
-                        <span><span className="block text-sm font-semibold text-slate-800">{a.name}</span><span className="block text-[11px] text-slate-400">Agent · {a.level}</span></span>
+                        <Avatar initials={a.initials} color={agentColor(a.agent_id)} size={30} />
+                        <span className="block text-sm font-semibold text-slate-800">{a.name}</span>
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-slate-600">{a.handled}</td>
@@ -806,41 +831,40 @@ function Team() {
 }
 
 /* ════════════════ SECTION 5 — RAPPORTS ════════════════ */
-const PRIORITY_OPTIONS = ['Toutes les priorités', 'Critique', 'Haute', 'Moyenne', 'Basse']
-const STATUS_OPTIONS = ['Tous les statuts', 'Ouvert', 'En cours', 'Résolu']
+function Reports() {
+  const [fmt, setFmt] = useState('pdf')
+  const [agents, setAgents] = useState([])
+  const [agentId, setAgentId] = useState('')
+  const [priority, setPriority] = useState('')
+  const [ticketStatus, setTicketStatus] = useState('')
+  const [downloading, setDownloading] = useState(false)
 
-function Reports({ notifications, onMarkRead, onMarkAllRead }) {
-  const [fmt, setFmt] = useState('PDF')
-  const [dateFrom, setDateFrom] = useState('2026-07-01')
-  const [dateTo, setDateTo] = useState('2026-07-14')
-  const [agentFilter, setAgentFilter] = useState('Tous les agents')
-  const [priorityFilter, setPriorityFilter] = useState(PRIORITY_OPTIONS[0])
-  const [statusFilter, setStatusFilter] = useState(STATUS_OPTIONS[0])
-  const [content, setContent] = useState([
-    { key: 'kpis', label: 'Synthèse des KPIs (volumes, SLA)', on: true },
-    { key: 'agents', label: 'Performance par agent', on: true },
-    { key: 'escalations', label: 'Détail des tickets escaladés', on: true },
-    { key: 'ai', label: 'Distribution des classifications IA', on: false },
-  ])
-  const FORMATS = ['PDF', 'Excel']
-  const AGENT_OPTIONS = ['Tous les agents', ...MOCK_AGENTS.map((a) => a.name)]
 
-  const toggleContent = (key) =>
-    setContent((prev) => prev.map((c) => (c.key === key ? { ...c, on: !c.on } : c)))
+  const FORMATS = [
+    { value: 'pdf', label: 'PDF' },
+    { value: 'excel', label: 'Excel' },
+    
+  ]
 
-  const generateReport = () => {
-    const included = content.filter((c) => c.on).map((c) => c.label)
-    if (dateFrom && dateTo && dateFrom > dateTo) {
-      toast.error('La date de fin doit être postérieure à la date de début.')
-      return
+
+  useEffect(() => {
+    fetchAgents().then(setAgents).catch(() => {})
+  }, [])
+
+  async function handleGenerate() {
+    try {
+      setDownloading(true)
+      await downloadReport(fmt, {
+        agent_id: agentId || undefined,
+        priority: priority || undefined,
+        status: ticketStatus || undefined,
+      })
+      toast.success('Rapport généré.')
+    } catch {
+      toast.error('Échec de la génération du rapport.')
+    } finally {
+      setDownloading(false)
     }
-    if (included.length === 0) {
-      toast.error('Sélectionnez au moins une section à inclure dans le rapport.')
-      return
-    }
-    // TODO API : POST /api/supervisor/reports/generate/
-    // { format: fmt, from: dateFrom, to: dateTo, agent: agentFilter, priority: priorityFilter, status: statusFilter, sections: included }
-    toast.success(`Rapport ${fmt} généré (simulation) — ${included.length} section(s) incluse(s)`)
   }
 
   return (
@@ -853,36 +877,27 @@ function Reports({ notifications, onMarkRead, onMarkAllRead }) {
         <Card title="Paramètres du rapport">
           <div className="space-y-3.5">
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Période</label>
-              <div className="flex gap-2">
-                <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700" />
-                <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700" />
-              </div>
-            </div>
-
-            <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1.5">Agent</label>
-              <select value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)}
+              <select value={agentId} onChange={(e) => setAgentId(e.target.value)}
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700 bg-white">
-                {AGENT_OPTIONS.map((o) => <option key={o}>{o}</option>)}
+                <option value="">Tous les agents</option>
+                {agents.map((a) => (
+                  <option key={a.agent_id} value={a.agent_id}>{a.full_name}</option>
+                ))}
               </select>
             </div>
-
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1.5">Priorité</label>
-              <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}
+              <select value={priority} onChange={(e) => setPriority(e.target.value)}
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700 bg-white">
-                {PRIORITY_OPTIONS.map((o) => <option key={o}>{o}</option>)}
+                {PRIORITIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
             </div>
-
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1.5">Statut</label>
-              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+              <select value={ticketStatus} onChange={(e) => setTicketStatus(e.target.value)}
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700 bg-white">
-                {STATUS_OPTIONS.map((o) => <option key={o}>{o}</option>)}
+                {STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
             </div>
           </div>
@@ -891,27 +906,21 @@ function Reports({ notifications, onMarkRead, onMarkAllRead }) {
         <Card title="Format d'export">
           <div className="flex gap-2 mb-5">
             {FORMATS.map((f) => (
-              <button key={f} type="button" onClick={() => setFmt(f)}
+              <button key={f.value} type="button" onClick={() => setFmt(f.value)}
                 className={`flex-1 border rounded-xl py-3 flex flex-col items-center gap-1.5 text-xs font-medium ${
-                  fmt === f ? 'border-secondary bg-secondary/5 text-secondary' : 'border-slate-200 text-slate-600'
+                  fmt === f.value ? 'border-secondary bg-secondary/5 text-secondary' : 'border-slate-200 text-slate-600'
                 }`}>
-                <FileText size={20} />{f}
+                <FileText size={20} />{f.label}
               </button>
             ))}
           </div>
-          <p className="text-sm font-semibold text-slate-700 mb-1.5">Contenu du rapport</p>
-          {content.map((c) => (
-            <button key={c.key} type="button" onClick={() => toggleContent(c.key)}
-              className="w-full flex items-center gap-2.5 py-1.5 text-sm text-left">
-              <span className={`h-4 w-4 rounded flex items-center justify-center shrink-0 ${c.on ? 'bg-secondary' : 'border border-slate-300'}`}>
-                {c.on && <Check size={11} className="text-white" strokeWidth={3} />}
-              </span>
-              <span className={c.on ? 'text-slate-600' : 'text-slate-400'}>{c.label}</span>
-            </button>
-          ))}
-          <button type="button" onClick={generateReport}
-            className="w-full flex items-center justify-center gap-2 bg-primary text-white rounded-lg py-2.5 text-sm font-medium mt-4 hover:bg-primary/90">
-            <Download size={15} /> Générer le rapport
+          <p className="text-xs text-slate-400 mb-3">
+            Le rapport inclut la synthèse des KPIs, la performance par agent et le détail des tickets escaladés,
+            sur le périmètre filtré à gauche.
+          </p>
+          <button type="button" onClick={handleGenerate} disabled={downloading}
+            className="w-full flex items-center justify-center gap-2 bg-primary text-white rounded-lg py-2.5 text-sm font-medium mt-4 hover:bg-primary/90 disabled:opacity-50">
+            <Download size={15} /> {downloading ? 'Génération...' : 'Générer le rapport'}
           </button>
         </Card>
       </div>
@@ -921,13 +930,29 @@ function Reports({ notifications, onMarkRead, onMarkAllRead }) {
 
 /* ════════════════ MODALE — RÉAFFECTATION ════════════════ */
 function ReassignModal({ ticket, onClose }) {
-  const [selected, setSelected] = useState(2)
+  const [agents, setAgents] = useState([])
+  const [selected, setSelected] = useState(null)
+  const [note, setNote] = useState('')
+  const [saving, setSaving] = useState(false)
 
-  const confirm = () => {
-    const target = REASSIGN_TARGETS[selected]
-    // TODO API : POST /api/tickets/{ticket.number}/reassign/ { target: target.name }
-    toast.success(`Ticket ${ticket.number} réaffecté à ${target.name} (simulation)`)
-    onClose()
+  useEffect(() => {
+    fetchAgents().then(setAgents).catch(() => toast.error("Impossible de charger les agents."))
+  }, [])
+
+  async function confirm() {
+    if (selected == null) return toast.error('Sélectionne un agent.')
+    try {
+      setSaving(true)
+      if (ticket.id) {
+        await reassignEscalation(ticket.id, agents[selected].agent_id, note)
+      }
+      toast.success('Ticket réaffecté.')
+      onClose()
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Échec de la réaffectation.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -948,19 +973,17 @@ function ReassignModal({ ticket, onClose }) {
           <div>
             <p className="text-sm font-semibold text-slate-700 mb-2">Affecter à</p>
             <div className="space-y-2">
-              {REASSIGN_TARGETS.map((t, i) => (
-                <button key={t.name} type="button" onClick={() => setSelected(i)}
+              {agents.map((a, i) => (
+                <button key={a.agent_id} type="button" onClick={() => setSelected(i)}
                   className={`w-full text-left border rounded-xl px-3.5 py-3 flex items-center gap-3 ${
                     selected === i ? 'border-secondary bg-secondary/5' : 'border-slate-200 hover:bg-slate-50'
                   }`}>
-                  {t.initials === 'N2'
-                    ? <span className="h-7 w-7 rounded-full bg-slate-500 text-white flex items-center justify-center shrink-0"><Building2 size={15} /></span>
-                    : <Avatar initials={t.initials} color={t.color} size={28} />}
+                  <Avatar initials={initialsFromName(a.full_name)} color={agentColor(a.agent_id)} size={28} />
                   <span className="flex-1">
-                    <span className="block text-sm font-semibold text-slate-700">{t.name}</span>
-                    <span className="block text-xs text-slate-500">{t.level}</span>
+                    <span className="block text-sm font-semibold text-slate-700">{a.full_name}</span>
+                    <span className="block text-xs text-slate-500">{a.status === 'AVAILABLE' ? 'Disponible' : a.status}</span>
                   </span>
-                  {t.load != null && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{t.load} tickets</span>}
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{a.workload} tickets</span>
                 </button>
               ))}
             </div>
@@ -968,20 +991,17 @@ function ReassignModal({ ticket, onClose }) {
 
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-1.5">Note pour l'agent (optionnel)</label>
-            <textarea rows={2} placeholder="Consignes, contexte, priorité de traitement…"
+            <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)}
+              placeholder="Consignes, contexte, priorité de traitement…"
               className="w-full border border-slate-300 rounded-lg p-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-secondary/40" />
-          </div>
-
-          <div className="flex gap-2.5 items-start bg-accent/10 border border-accent/30 rounded-lg px-3 py-2.5 text-xs text-amber-800">
-            <AlertTriangle size={15} className="text-accent shrink-0 mt-0.5" />
-            L'agent sélectionné sera notifié immédiatement par email et sur la plateforme.
           </div>
         </div>
 
         <div className="flex gap-2.5 px-5 py-4 border-t border-slate-100">
           <button type="button" onClick={onClose} className="flex-1 bg-white border border-slate-200 text-slate-600 rounded-lg py-2.5 text-sm font-medium hover:bg-slate-50">Annuler</button>
-          <button type="button" onClick={confirm} className="flex-1 flex items-center justify-center gap-2 bg-primary text-white rounded-lg py-2.5 text-sm font-medium hover:bg-primary/90">
-            <Check size={15} /> Confirmer la réaffectation
+          <button type="button" onClick={confirm} disabled={saving}
+            className="flex-1 flex items-center justify-center gap-2 bg-primary text-white rounded-lg py-2.5 text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
+            <Check size={15} /> {saving ? 'Enregistrement...' : 'Confirmer la réaffectation'}
           </button>
         </div>
       </div>

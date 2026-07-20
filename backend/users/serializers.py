@@ -2,7 +2,7 @@
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from users.models import User, Role
- 
+from users.models import AgentAvailability
  
 # -----------------------------------------------------------------------
 # Serializer du rôle — lecture seule, utilisé dans UserSerializer
@@ -103,23 +103,54 @@ class PasswordResetSerializer(serializers.Serializer):
 class UserListSerializer(serializers.ModelSerializer):
     """
     Serializer utilisé uniquement pour la liste des utilisateurs côté admin.
-    Affiche plus d'informations que UserSerializer de base :
-    le nom complet, le rôle, le statut, et la date de dernière connexion.
     """
-    role        = RoleSerializer(read_only=True)
-    full_name   = serializers.SerializerMethodField()
+    role = RoleSerializer(read_only=True)
+    full_name = serializers.SerializerMethodField()
     status_label = serializers.SerializerMethodField()
- 
+
     class Meta:
-        model  = User
+        model = User
         fields = [
             'id', 'full_name', 'first_name', 'last_name',
             'email', 'phone', 'role', 'is_active',
             'status_label', 'created_at', 'last_login'
         ]
- 
+
     def get_full_name(self, obj):
         return f"{obj.first_name} {obj.last_name}"
- 
+
     def get_status_label(self, obj):
         return "Actif" if obj.is_active else "Désactivé"
+
+
+class ProfileUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = [
+            'first_name',
+            'last_name',
+            'email',
+            'phone',
+            'photo',
+        ]
+
+    def validate_email(self, value):
+        user = self.instance
+
+        if User.objects.exclude(pk=user.pk).filter(email=value).exists():
+            raise serializers.ValidationError(
+                "Cette adresse email est déjà utilisée."
+            )
+
+        return value
+class AgentAvailabilitySerializer(serializers.ModelSerializer):
+    agent_id = serializers.IntegerField(source='agent.id', read_only=True)
+    full_name = serializers.SerializerMethodField()
+    email = serializers.CharField(source='agent.email', read_only=True)
+
+    class Meta:
+        model = AgentAvailability
+        fields = ['agent_id', 'full_name', 'email', 'status', 'workload', 'updated_at']
+
+    def get_full_name(self, obj):
+        return f"{obj.agent.first_name} {obj.agent.last_name}"
