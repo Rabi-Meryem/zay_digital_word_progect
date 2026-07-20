@@ -70,7 +70,7 @@ function AgentChatPage() {
               Messagerie — Ticket #{shortNumber}
             </p>
             <p className="text-xs text-primary-foreground/70 truncate">
-              {ticket.client.first_name} {ticket.client.last_name} · {ticket.client.company}
+              Client · Ticket #{shortNumber}
             </p>
           </div>
           <PriorityBadge priority={ticket.priority} />
@@ -97,7 +97,7 @@ function AgentChatPage() {
                 >
                   {isAgent
                     ? `Vous · ${fmtTime(message.at)}`
-                    : `${ticket.client.first_name} ${ticket.client.last_name} · ${fmtTime(message.at)}`}
+                    : `Client · ${fmtTime(message.at)}`}
                 </p>
                 <div
                   className={`inline-block max-w-full rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${

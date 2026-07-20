@@ -2,7 +2,9 @@ import { useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import LoginPage from './pages/LoginPage'
-import ClientDashboardPage from './pages/ClientDashboardPage'
+import ClientOverviewPage from './pages/ClientOverviewPage'
+import ClientTicketsPage from './pages/ClientTicketsPage'
+import NewTicketPage from './pages/NewTicketPage'
 import AgentDashboardPage from './pages/AgentDashboardPage'
 import AgentTicketPage from './pages/AgentTicketPage'
 import AgentChatPage from './pages/AgentChatPage'
@@ -13,6 +15,11 @@ import ProtectedRoute from './routes/ProtectedRoute'
 import { fetchMe } from './store/authSlice'
 import { getAccessToken } from './api/tokenStorage'
 import SupervisorProfilePage from './pages/SupervisorProfilePage'
+import AgentProfilePage from './pages/AgentProfilePage'
+import AgentStatsPage from './pages/AgentStatsPage'
+import ClientProfilePage from './pages/ClientProfilePage'
+import AdminProfilePage from './pages/AdminProfilePage'
+import AdminUsersPage from './pages/AdminUsersPage'
 
 function App() {
   const dispatch = useDispatch()
@@ -34,7 +41,7 @@ function App() {
         path="/dashboard"
         element={
           <ProtectedRoute>
-            <ClientDashboardPage />
+            <ClientOverviewPage />
           </ProtectedRoute>
         }
       />
@@ -79,6 +86,22 @@ function App() {
         }
       />
       <Route
+        path="/tickets"
+        element={
+          <ProtectedRoute>
+            <ClientTicketsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/tickets/nouveau"
+        element={
+          <ProtectedRoute>
+            <NewTicketPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/tickets/:ticketId"
         element={
           <ProtectedRoute>
@@ -87,6 +110,25 @@ function App() {
         }
       />
       <Route path="/supervisor/profil" element={<ProtectedRoute><SupervisorProfilePage /></ProtectedRoute>} />
+      <Route
+        path="/agent/profil"
+        element={
+          <ProtectedRoute>
+            <AgentProfilePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/agent/stats"
+        element={
+          <ProtectedRoute>
+            <AgentStatsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route path="/profil" element={<ProtectedRoute><ClientProfilePage /></ProtectedRoute>} />
+      <Route path="/admin/profil" element={<ProtectedRoute><AdminProfilePage /></ProtectedRoute>} />
+      <Route path="/admin/utilisateurs" element={<ProtectedRoute><AdminUsersPage /></ProtectedRoute>} /> 
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   )

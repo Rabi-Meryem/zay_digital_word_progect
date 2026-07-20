@@ -4,6 +4,8 @@ import { ArrowLeft, Send, Star } from 'lucide-react'
 import { MOCK_TICKETS } from '../data/mockTickets'
 import PriorityBadge from '../components/tickets/PriorityBadge'
 import StatusBadge from '../components/tickets/StatusBadge'
+import LifecycleStepper from '../components/tickets/LifecycleStepper'
+import InterventionHistory from '../components/tickets/InterventionHistory'
 
 // ⚠️ Données de démonstration (voir mockTickets.js) — l'envoi de message et
 // l'évaluation ne persistent qu'en mémoire locale, en l'absence d'API
@@ -21,6 +23,7 @@ function TicketDetailPage() {
   const [rating, setRating] = useState(0)
   const [comment, setComment] = useState('')
   const [evaluationSent, setEvaluationSent] = useState(false)
+  const [onglet, setOnglet] = useState('conversation')
 
   if (!ticket) {
     return (
@@ -28,7 +31,7 @@ function TicketDetailPage() {
         <p>Ticket introuvable.</p>
         <button
           type="button"
-          onClick={() => navigate('/dashboard')}
+          onClick={() => navigate('/tickets')}
           className="text-secondary text-sm hover:underline"
         >
           ← Retour à mes tickets
@@ -53,7 +56,7 @@ function TicketDetailPage() {
       <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-3">
         <button
           type="button"
-          onClick={() => navigate('/dashboard')}
+          onClick={() => navigate('/tickets')}
           className="text-slate-500 hover:text-slate-700 shrink-0"
           aria-label="Retour"
         >
@@ -70,7 +73,40 @@ function TicketDetailPage() {
         </div>
       </header>
 
-      <div className="flex-1 max-w-2xl w-full mx-auto p-4 space-y-3 overflow-y-auto">
+      <div className="bg-white border-b border-slate-200 px-4">
+        <div className="max-w-2xl mx-auto flex gap-1">
+          {[
+            { cle: 'conversation', label: 'Conversation' },
+            { cle: 'suivi', label: 'Suivi de la demande' },
+          ].map((o) => (
+            <button
+              key={o.cle}
+              type="button"
+              onClick={() => setOnglet(o.cle)}
+              className={`text-sm px-3 py-2.5 border-b-2 transition-colors ${
+                onglet === o.cle
+                  ? 'border-primary text-primary font-medium'
+                  : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {onglet === 'suivi' && (
+        <div className="flex-1 max-w-2xl w-full mx-auto p-4 space-y-4 overflow-y-auto">
+          <LifecycleStepper ticket={ticket} />
+          <InterventionHistory ticketId={ticket.id} />
+        </div>
+      )}
+
+      <div
+        className={`flex-1 max-w-2xl w-full mx-auto p-4 space-y-3 overflow-y-auto ${
+          onglet === 'conversation' ? '' : 'hidden'
+        }`}
+      >
         {messages.length === 0 && (
           <p className="text-center text-sm text-slate-400 py-6">Aucun message pour ce ticket.</p>
         )}
@@ -136,7 +172,7 @@ function TicketDetailPage() {
         )}
       </div>
 
-      {!isResolved && (
+      {!isResolved && onglet === 'conversation' && (
         <div className="border-t border-slate-200 bg-white p-3 flex items-center gap-2">
           <input
             type="text"

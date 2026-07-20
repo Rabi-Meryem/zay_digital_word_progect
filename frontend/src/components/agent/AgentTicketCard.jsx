@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { MessageSquare, ArrowUpRight, ChevronRight, User } from 'lucide-react'
+import { MessageSquare, ArrowUpRight, ChevronRight } from 'lucide-react'
 import PriorityBadge from '../tickets/PriorityBadge'
 import StatusBadge from '../tickets/StatusBadge'
 import SlaBar from '../tickets/SlaBar'
@@ -32,13 +32,8 @@ function AgentTicketCard({ ticket }) {
             #{ticket.ticket_number.split('-').pop()}
           </p>
           <h3 className="font-medium text-slate-800 mt-0.5 truncate">{ticket.title}</h3>
-          <div className="flex items-center gap-1.5 mt-1.5 text-xs text-slate-500">
-            <User size={12} className="shrink-0" />
-            <span className="truncate">
-              {ticket.client.first_name} {ticket.client.last_name} ·{' '}
-              {ticket.client.company}
-            </span>
-          </div>
+          {/* Identité du client volontairement masquée pour l'agent :
+              l'agent traite le ticket sans voir qui l'a créé (confidentialité). */}
         </div>
         <div className="flex flex-col items-end gap-1.5 shrink-0">
           <PriorityBadge priority={ticket.priority} />

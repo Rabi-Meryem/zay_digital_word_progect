@@ -143,11 +143,11 @@ function AgentTicketPage() {
             </p>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
               <div>
-                <dt className="text-xs text-slate-400">Client</dt>
+                <dt className="text-xs text-slate-400">Référence</dt>
                 <dd className="font-medium text-slate-700 mt-0.5">
-                  {ticket.client.first_name} {ticket.client.last_name}
+                  {ticket.ticket_number}
                   <span className="block text-xs font-normal text-slate-400">
-                    {ticket.client.company}
+                    Demandeur anonymisé
                   </span>
                 </dd>
               </div>

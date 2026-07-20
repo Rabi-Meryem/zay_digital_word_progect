@@ -100,11 +100,26 @@ class PasswordResetSerializer(serializers.Serializer):
             )
         return attrs
  
+class UserListSerializer(serializers.ModelSerializer):
+    """
+    Serializer utilisé uniquement pour la liste des utilisateurs côté admin.
+    Affiche plus d'informations que UserSerializer de base :
+    le nom complet, le rôle, le statut, et la date de dernière connexion.
+    """
+    role        = RoleSerializer(read_only=True)
+    full_name   = serializers.SerializerMethodField()
+    status_label = serializers.SerializerMethodField()
  
-# -----------------------------------------------------------------------
-# Serializer pour que l'utilisateur connecté modifie son propre profil
-# -----------------------------------------------------------------------
-class ProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:
-        model = User
-        fields = ['first_name', 'last_name', 'phone']
+        model  = User
+        fields = [
+            'id', 'full_name', 'first_name', 'last_name',
+            'email', 'phone', 'role', 'is_active',
+            'status_label', 'created_at', 'last_login'
+        ]
+ 
+    def get_full_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}"
+ 
+    def get_status_label(self, obj):
+        return "Actif" if obj.is_active else "Désactivé"

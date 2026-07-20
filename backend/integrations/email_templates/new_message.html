@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; background:#f4f4f4; padding:20px;">
+<div style="background:white;padding:30px;border-radius:8px;max-width:600px;margin:auto;">
+
+<h2 style="color:#2563EB;">Nouveau message 💬</h2>
+
+<p>Bonjour <strong>{{ recipient_name }}</strong>,</p>
+
+<p>Un nouveau message a été ajouté sur votre ticket.</p>
+
+<p><strong>Ticket :</strong> {{ ticket_number }}</p>
+
+<p><strong>Titre :</strong> {{ ticket_title }}</p>
+
+<div style="background:#F8FAFC;padding:15px;border-left:4px solid #2563EB;margin-top:20px;">
+{{ message_preview }}
+</div>
+
+<a href="{{ portal_url }}"
+style="background:#2563EB;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin-top:20px;">
+Répondre au ticket
+</a>
+
+</div>
+</body>
+</html>

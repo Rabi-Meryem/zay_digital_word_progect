@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
-import { Ticket, MessageSquare, LogOut } from 'lucide-react'
+import { Ticket, MessageSquare, LogOut, User, LineChart } from 'lucide-react'
 import AgentTicketCard from '../components/agent/AgentTicketCard'
 import NotificationsPanel from '../components/agent/NotificationsPanel'
 import { MOCK_AGENT_TICKETS } from '../data/mockAgentTickets'
@@ -106,6 +106,22 @@ function AgentDashboardPage() {
                 {unreadTotal}
               </span>
             )}
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/agent/stats')}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50"
+          >
+            <LineChart size={16} />
+            Mon évolution
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/agent/profil')}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50"
+          >
+            <User size={16} />
+            Mon profil
           </button>
         </nav>
 

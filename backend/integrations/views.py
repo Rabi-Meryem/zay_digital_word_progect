@@ -1,3 +1,31 @@
 from django.shortcuts import render
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
+from django.conf import settings
+from integrations.imap_service import imap_service
 
-# Create your views here.
+
+class IMAPPollView(APIView):
+    """
+    Endpoint appelé automatiquement toutes les 2 minutes
+    par un cron job (Windows Task Scheduler ou Linux cron).
+    Sécurisé par un token secret partagé.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        # Vérifier le token secret
+        secret = request.headers.get("X-Cron-Secret", "")
+        if secret != settings.INTERNAL_WEBHOOK_SECRET:
+            return Response({"detail": "Non autorisé."}, status=403)
+
+        try:
+            tickets = imap_service.poll()
+            return Response({
+                "status": "ok",
+                "tickets_created": tickets,
+                "count": len(tickets)
+            })
+        except Exception as e:
+            return Response({"status": "error", "detail": str(e)}, status=500)

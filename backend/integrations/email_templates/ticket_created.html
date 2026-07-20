@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; background:#f4f4f4; padding:20px;">
+  <div style="background:white; padding:30px; border-radius:8px; max-width:600px; margin:auto;">
+    <h2 style="color:#1E2761;">Votre ticket a été créé ✓</h2>
+    <p>Bonjour <strong>{{ client_name }}</strong>,</p>
+    <p>Votre demande a bien été enregistrée sous la référence :</p>
+    <div style="background:#F0F4FF; padding:15px; border-radius:6px; text-align:center;">
+      <span style="font-size:24px; font-weight:bold; color:#2563EB;">{{ ticket_number }}</span>
+    </div>
+    <p><strong>Titre :</strong> {{ ticket_title }}</p>
+    <p><strong>Priorité détectée :</strong> {{ priority }}</p>
+    <p><strong>Délai de résolution :</strong> {{ sla_deadline }}</p>
+    <a href="{{ portal_url }}" style="background:#2563EB; color:white; padding:12px 24px;
+       border-radius:6px; text-decoration:none; display:inline-block; margin-top:15px;">
+      Suivre mon ticket
+    </a>
+    <p style="color:#64748B; font-size:12px; margin-top:30px;">
+      ZAY Digital World — Support Client
+    </p>
+  </div>
+</body>
+</html>
