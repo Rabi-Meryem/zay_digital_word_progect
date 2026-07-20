@@ -14,6 +14,7 @@ import TicketDetailPage from './pages/TicketDetailPage'
 import ProtectedRoute from './routes/ProtectedRoute'
 import { fetchMe } from './store/authSlice'
 import { getAccessToken } from './api/tokenStorage'
+import ClientProfilePage from './pages/ClientProfilePage'
 import AdminProfilePage from './pages/AdminProfilePage'
 import AdminUsersPage from './pages/AdminUsersPage'
 
@@ -105,6 +106,7 @@ function App() {
           </ProtectedRoute>
         }
       />
+      <Route path="/profil" element={<ProtectedRoute><ClientProfilePage /></ProtectedRoute>} />
       <Route path="/admin/profil" element={<ProtectedRoute><AdminProfilePage /></ProtectedRoute>} />
       <Route path="/admin/utilisateurs" element={<ProtectedRoute><AdminUsersPage /></ProtectedRoute>} /> 
       <Route path="*" element={<Navigate to="/login" replace />} />

@@ -10,6 +10,7 @@ import { logout } from '../../store/authSlice'
 const ONGLETS = [
   { to: '/dashboard', label: 'Tableau de bord' },
   { to: '/tickets', label: 'Mes tickets' },
+  { to: '/profil', label: 'Mon profil' },
 ]
 
 function ClientHeader() {
