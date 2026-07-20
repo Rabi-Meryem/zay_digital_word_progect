@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
+import toast from 'react-hot-toast'
 import {
   LayoutDashboard, ArrowUpCircle, AlarmClock, Users, FileText,
-  Bell, LogOut, Download, ArrowLeftRight, ShieldCheck, Layers, Lock,
-  MessageCircle, Clock, AlertTriangle, CheckCircle2, User, Building2, X, Check,
+  Bell, LogOut, Download, ArrowLeftRight, Layers, Lock,
+  MessageCircle, Clock, AlertTriangle, CheckCircle2, User, Building2, X, Check, Send,
 } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -16,7 +17,7 @@ import { getSlaInfo } from '../../utils/sla'
 import { logout } from '../../store/authSlice'
 import {
   MOCK_KPIS, MOCK_VOLUME, MOCK_STATUS, MOCK_AI_CLASS, MOCK_AI_CONF, MOCK_AI_CONF_AVG,
-  MOCK_ESCALATIONS, MOCK_SLA_TICKETS, MOCK_AGENTS, REASSIGN_TARGETS,
+  MOCK_ESCALATIONS, MOCK_SLA_TICKETS, MOCK_AGENTS, REASSIGN_TARGETS, MOCK_NOTIFICATIONS,
 } from '../../data/mockSupervisor'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -74,6 +75,16 @@ function SupervisorDashboardPage() {
   const dispatch = useDispatch()
   const [section, setSection] = useState('overview')
   const [reassign, setReassign] = useState(null) // { number, title } | null
+
+  // Notifications — état partagé au niveau de la page pour rester cohérent
+  // quelle que soit la section active. À remplacer par GET /api/notifications/
+  // (+ WebSocket pour le temps réel) une fois le backend branché.
+  const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS)
+  const markNotifRead = (id) =>
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))
+  const markAllNotifsRead = () =>
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+  const bellProps = { notifications, onMarkRead: markNotifRead, onMarkAllRead: markAllNotifsRead }
 
   const name = user ? `${user.first_name} ${user.last_name ?? ''}`.trim() : 'Karim Said'
   const initials = name.split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase()
@@ -169,11 +180,11 @@ function SupervisorDashboardPage() {
 
       {/* ── Contenu ─────────────────────────────────────────────────────── */}
       <main className="flex-1 min-w-0 p-4 sm:p-6">
-        {section === 'overview' && <Overview />}
-        {section === 'escalations' && <Escalations onReassign={setReassign} />}
-        {section === 'sla' && <SlaSupervision onReassign={setReassign} />}
+        {section === 'overview' && <Overview {...bellProps} />}
+        {section === 'escalations' && <Escalations onReassign={setReassign} {...bellProps} />}
+        {section === 'sla' && <SlaSupervision onReassign={setReassign} {...bellProps} />}
         {section === 'team' && <Team />}
-        {section === 'reports' && <Reports />}
+        {section === 'reports' && <Reports {...bellProps} />}
       </main>
 
       {reassign && <ReassignModal ticket={reassign} onClose={() => setReassign(null)} />}
@@ -194,12 +205,61 @@ function TopBar({ title, desc, children }) {
   )
 }
 
-function BellButton() {
+function NotificationBell({ notifications = [], onMarkRead, onMarkAllRead }) {
+  const [open, setOpen] = useState(false)
+  const unread = notifications.filter((n) => !n.read).length
+
   return (
-    <button type="button" className="relative text-slate-500 hover:text-slate-700" aria-label="Notifications">
-      <Bell size={19} />
-      <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-danger" />
-    </button>
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="relative text-slate-500 hover:text-slate-700"
+        aria-label="Notifications"
+      >
+        <Bell size={19} />
+        {unread > 0 && <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-danger" />}
+      </button>
+
+      {open && (
+        <>
+          {/* Fond invisible pour fermer le panneau au clic extérieur */}
+          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 mt-2 w-80 max-w-[90vw] bg-white border border-slate-200 rounded-xl shadow-lg z-30 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+              <p className="text-sm font-semibold text-slate-700">
+                Notifications{unread > 0 && ` (${unread})`}
+              </p>
+              {unread > 0 && (
+                <button
+                  type="button"
+                  onClick={onMarkAllRead}
+                  className="text-xs font-medium text-secondary hover:underline"
+                >
+                  Tout marquer comme lu
+                </button>
+              )}
+            </div>
+            <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+              {notifications.length === 0 && (
+                <p className="px-4 py-6 text-center text-sm text-slate-400">Aucune notification.</p>
+              )}
+              {notifications.map((n) => (
+                <button
+                  key={n.id}
+                  type="button"
+                  onClick={() => onMarkRead(n.id)}
+                  className={`w-full text-left px-4 py-3 hover:bg-slate-50 ${!n.read ? 'bg-secondary/5' : ''}`}
+                >
+                  <p className="text-sm text-slate-700 leading-snug">{n.text}</p>
+                  <p className="text-xs text-slate-400 mt-1">{n.time}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
   )
 }
 
@@ -230,15 +290,23 @@ function Card({ title, hint, right, children, className = '' }) {
   )
 }
 
-function Overview() {
+function Overview({ notifications, onMarkRead, onMarkAllRead }) {
   const k = MOCK_KPIS
+  const exportPdf = () => {
+    // TODO API : GET /api/supervisor/reports/export/?format=pdf&section=overview
+    toast.success("Export PDF de la vue d'ensemble généré (simulation)")
+  }
   return (
     <>
       <TopBar title="Vue d'ensemble" desc="Indicateurs de performance de la plateforme">
-        <button type="button" className="hidden sm:flex items-center gap-1.5 text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50">
+        <button
+          type="button"
+          onClick={exportPdf}
+          className="hidden sm:flex items-center gap-1.5 text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50"
+        >
           <Download size={14} /> Export PDF
         </button>
-        <BellButton />
+        <NotificationBell notifications={notifications} onMarkRead={onMarkRead} onMarkAllRead={onMarkAllRead} />
       </TopBar>
 
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-5">
@@ -372,24 +440,41 @@ function ReasonChip({ reason }) {
   )
 }
 
-function Escalations({ onReassign }) {
+function Escalations({ onReassign, notifications, onMarkRead, onMarkAllRead }) {
   const [filter, setFilter] = useState('all')
-  const list = MOCK_ESCALATIONS.filter((e) =>
+  const [escalations, setEscalations] = useState(MOCK_ESCALATIONS)
+  const [viewing, setViewing] = useState(null) // escalation en cours de consultation | null
+
+  const list = escalations.filter((e) =>
     filter === 'all' ? true : filter === 'pending' ? e.state === 'pending' : e.state === 'taken'
   )
-  const nPending = MOCK_ESCALATIONS.filter((e) => e.state === 'pending').length
-  const nTaken = MOCK_ESCALATIONS.filter((e) => e.state === 'taken').length
+  const nPending = escalations.filter((e) => e.state === 'pending').length
+  const nTaken = escalations.filter((e) => e.state === 'taken').length
 
   const CHIPS = [
-    { key: 'all', label: `Toutes (${MOCK_ESCALATIONS.length})` },
+    { key: 'all', label: `Toutes (${escalations.length})` },
     { key: 'pending', label: `En attente (${nPending})` },
     { key: 'taken', label: `Prises en charge (${nTaken})` },
   ]
 
+  // TODO API : POST /api/escalations/{id}/take/
+  const takeCharge = (e) => {
+    setEscalations((prev) =>
+      prev.map((x) => (x.id === e.id ? { ...x, state: 'taken', takenNote: 'Pris en charge par vous à l’instant' } : x))
+    )
+    toast.success(`Ticket ${e.number} pris en charge (simulation)`)
+  }
+
+  // TODO API : POST /api/escalations/{id}/send-back/
+  const sendBack = (e) => {
+    setEscalations((prev) => prev.filter((x) => x.id !== e.id))
+    toast.success(`Ticket ${e.number} renvoyé à ${e.escalatedBy.name} (simulation)`)
+  }
+
   return (
     <>
       <TopBar title="Escalades reçues" desc="Tickets transmis par les agents de Niveau 1 · à qualifier et affecter">
-        <BellButton />
+        <NotificationBell notifications={notifications} onMarkRead={onMarkRead} onMarkAllRead={onMarkAllRead} />
       </TopBar>
 
       <div className="flex gap-2 mb-4 flex-wrap">
@@ -440,17 +525,21 @@ function Escalations({ onReassign }) {
               <div className="flex gap-2 mt-3 flex-wrap">
                 {e.state === 'pending' ? (
                   <>
-                    <button type="button" className="text-xs font-medium bg-primary text-white rounded-lg px-3 py-2 hover:bg-primary/90">Prendre en charge</button>
+                    <button type="button" onClick={() => takeCharge(e)}
+                      className="text-xs font-medium bg-primary text-white rounded-lg px-3 py-2 hover:bg-primary/90">Prendre en charge</button>
                     <button type="button" onClick={() => onReassign({ number: e.number, title: e.title })}
                       className="flex items-center gap-1.5 text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50">
                       <ArrowLeftRight size={14} /> Réaffecter
                     </button>
-                    <button type="button" className="text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50">Renvoyer à l'agent</button>
+                    <button type="button" onClick={() => sendBack(e)}
+                      className="text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50">Renvoyer à l'agent</button>
                   </>
                 ) : (
                   <>
-                    <button type="button" className="text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50">Ouvrir la fiche</button>
-                    <button type="button" className="text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50">Messages</button>
+                    <button type="button" onClick={() => setViewing(e)}
+                      className="text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50">Ouvrir la fiche</button>
+                    <button type="button" onClick={() => setViewing(e)}
+                      className="text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50">Messages</button>
                   </>
                 )}
               </div>
@@ -458,7 +547,93 @@ function Escalations({ onReassign }) {
           )
         })}
       </div>
+
+      {viewing && <EscalationDetailModal escalation={viewing} onClose={() => setViewing(null)} />}
     </>
+  )
+}
+
+/* ════════════════ MODALE — FICHE ESCALADE & MESSAGES ════════════════ */
+function EscalationDetailModal({ escalation, onClose }) {
+  const [messages, setMessages] = useState(escalation.messages ?? [])
+  const [draft, setDraft] = useState('')
+
+  // TODO API : POST /api/tickets/{escalation.id}/messages/
+  const send = () => {
+    if (!draft.trim()) return
+    setMessages((prev) => [...prev, { id: Date.now(), author: 'Vous', text: draft.trim(), time: "à l'instant" }])
+    setDraft('')
+  }
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" onClick={onClose}>
+      <div
+        className="w-full max-w-lg bg-white rounded-2xl shadow-xl overflow-hidden max-h-[85vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-slate-100">
+          <div>
+            <p className="text-xs text-slate-400">{escalation.number} · {escalation.date}</p>
+            <p className="font-semibold text-slate-800 mt-0.5">{escalation.title}</p>
+            <p className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
+              <User size={12} />{escalation.client} · {escalation.company}
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 shrink-0">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 space-y-3.5 overflow-y-auto flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <PriorityBadge priority={escalation.priority} />
+            {escalation.state === 'taken'
+              ? <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-success/10 text-success">Pris en charge</span>
+              : <StatusBadge status="ESCALATED" />}
+            <ReasonChip reason={escalation.reason} />
+          </div>
+
+          <SlaBar createdAt={escalation.createdAt} slaDeadline={escalation.slaDeadline} priority={escalation.priority} />
+
+          <p className="bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-xs text-slate-600 italic leading-relaxed">
+            « {escalation.context} »
+          </p>
+
+          <div>
+            <p className="text-sm font-semibold text-slate-700 mb-2">Messages</p>
+            {messages.length === 0 ? (
+              <p className="text-sm text-slate-400">Aucun message pour ce ticket.</p>
+            ) : (
+              <div className="space-y-2">
+                {messages.map((m) => (
+                  <div
+                    key={m.id}
+                    className={`text-sm rounded-lg px-3 py-2 max-w-[85%] ${
+                      m.author === 'Vous' ? 'ml-auto bg-primary text-white' : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    {m.text}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex gap-2 px-5 py-3 border-t border-slate-100">
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && send()}
+            placeholder="Écrire un message... (Entrée pour envoyer)"
+            className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/40"
+          />
+          <button type="button" onClick={send} className="bg-primary text-white rounded-lg px-3 py-2 hover:bg-primary/90" aria-label="Envoyer">
+            <Send size={16} />
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -477,7 +652,7 @@ function MiniStat({ Icon, tint, value, label, valueColor }) {
   )
 }
 
-function SlaSupervision({ onReassign }) {
+function SlaSupervision({ onReassign, notifications, onMarkRead, onMarkAllRead }) {
   const [filter, setFilter] = useState('all')
   const rows = MOCK_SLA_TICKETS
     .map((t) => ({ ...t, info: getSlaInfo(t.createdAt, t.slaDeadline, t.priority) }))
@@ -488,7 +663,9 @@ function SlaSupervision({ onReassign }) {
 
   return (
     <>
-      <TopBar title="Supervision SLA" desc="Surveillance des délais en temps réel · tri par urgence"><BellButton /></TopBar>
+      <TopBar title="Supervision SLA" desc="Surveillance des délais en temps réel · tri par urgence">
+        <NotificationBell notifications={notifications} onMarkRead={onMarkRead} onMarkAllRead={onMarkAllRead} />
+      </TopBar>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
         <MiniStat Icon={AlertTriangle} tint={{ bg: 'rgba(192,57,43,.10)', fg: COLORS.danger }} value={MOCK_KPIS.slaBreached} valueColor={COLORS.danger} label="SLA dépassé" />
@@ -544,7 +721,14 @@ function Team() {
   return (
     <>
       <TopBar title="Performance de l'équipe" desc="Charge, délais et satisfaction par agent · 30 derniers jours">
-        <button type="button" className="hidden sm:flex items-center gap-1.5 text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50">
+        <button
+          type="button"
+          onClick={() => {
+            // TODO API : GET /api/supervisor/reports/export/?format=csv&section=team
+            toast.success("Export CSV de la performance d'équipe généré (simulation)")
+          }}
+          className="hidden sm:flex items-center gap-1.5 text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50"
+        >
           <Download size={14} /> Exporter
         </button>
       </TopBar>
@@ -612,18 +796,48 @@ function Team() {
 }
 
 /* ════════════════ SECTION 5 — RAPPORTS ════════════════ */
-function Reports() {
+const PRIORITY_OPTIONS = ['Toutes les priorités', 'Critique', 'Haute', 'Moyenne', 'Basse']
+const STATUS_OPTIONS = ['Tous les statuts', 'Ouvert', 'En cours', 'Résolu']
+
+function Reports({ notifications, onMarkRead, onMarkAllRead }) {
   const [fmt, setFmt] = useState('PDF')
+  const [dateFrom, setDateFrom] = useState('2026-07-01')
+  const [dateTo, setDateTo] = useState('2026-07-14')
+  const [agentFilter, setAgentFilter] = useState('Tous les agents')
+  const [priorityFilter, setPriorityFilter] = useState(PRIORITY_OPTIONS[0])
+  const [statusFilter, setStatusFilter] = useState(STATUS_OPTIONS[0])
+  const [content, setContent] = useState([
+    { key: 'kpis', label: 'Synthèse des KPIs (volumes, SLA)', on: true },
+    { key: 'agents', label: 'Performance par agent', on: true },
+    { key: 'escalations', label: 'Détail des tickets escaladés', on: true },
+    { key: 'ai', label: 'Distribution des classifications IA', on: false },
+  ])
   const FORMATS = ['PDF', 'Excel', 'CSV']
-  const CONTENT = [
-    { label: 'Synthèse des KPIs (volumes, SLA)', on: true },
-    { label: 'Performance par agent', on: true },
-    { label: 'Détail des tickets escaladés', on: true },
-    { label: 'Distribution des classifications IA', on: false },
-  ]
+  const AGENT_OPTIONS = ['Tous les agents', ...MOCK_AGENTS.map((a) => a.name)]
+
+  const toggleContent = (key) =>
+    setContent((prev) => prev.map((c) => (c.key === key ? { ...c, on: !c.on } : c)))
+
+  const generateReport = () => {
+    const included = content.filter((c) => c.on).map((c) => c.label)
+    if (dateFrom && dateTo && dateFrom > dateTo) {
+      toast.error('La date de fin doit être postérieure à la date de début.')
+      return
+    }
+    if (included.length === 0) {
+      toast.error('Sélectionnez au moins une section à inclure dans le rapport.')
+      return
+    }
+    // TODO API : POST /api/supervisor/reports/generate/
+    // { format: fmt, from: dateFrom, to: dateTo, agent: agentFilter, priority: priorityFilter, status: statusFilter, sections: included }
+    toast.success(`Rapport ${fmt} généré (simulation) — ${included.length} section(s) incluse(s)`)
+  }
+
   return (
     <>
-      <TopBar title="Rapports & exports" desc="Générer un rapport de performance filtré au format PDF, Excel ou CSV"><BellButton /></TopBar>
+      <TopBar title="Rapports & exports" desc="Générer un rapport de performance filtré au format PDF, Excel ou CSV">
+        <NotificationBell notifications={notifications} onMarkRead={onMarkRead} onMarkAllRead={onMarkAllRead} />
+      </TopBar>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 max-w-4xl">
         <Card title="Paramètres du rapport">
@@ -631,18 +845,36 @@ function Reports() {
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1.5">Période</label>
               <div className="flex gap-2">
-                <input readOnly value="01/07/2026" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700" />
-                <input readOnly value="14/07/2026" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700" />
+                <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700" />
+                <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700" />
               </div>
             </div>
-            {['Agent', 'Priorité', 'Statut'].map((f) => (
-              <div key={f}>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">{f}</label>
-                <select className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700 bg-white">
-                  <option>Tou{f === 'Priorité' ? 'tes les priorités' : f === 'Statut' ? 's les statuts' : 's les agents'}</option>
-                </select>
-              </div>
-            ))}
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Agent</label>
+              <select value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700 bg-white">
+                {AGENT_OPTIONS.map((o) => <option key={o}>{o}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Priorité</label>
+              <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700 bg-white">
+                {PRIORITY_OPTIONS.map((o) => <option key={o}>{o}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Statut</label>
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700 bg-white">
+                {STATUS_OPTIONS.map((o) => <option key={o}>{o}</option>)}
+              </select>
+            </div>
           </div>
         </Card>
 
@@ -658,15 +890,17 @@ function Reports() {
             ))}
           </div>
           <p className="text-sm font-semibold text-slate-700 mb-1.5">Contenu du rapport</p>
-          {CONTENT.map((c) => (
-            <div key={c.label} className="flex items-center gap-2.5 py-1.5 text-sm">
-              <span className={`h-4 w-4 rounded flex items-center justify-center ${c.on ? 'bg-secondary' : 'border border-slate-300'}`}>
+          {content.map((c) => (
+            <button key={c.key} type="button" onClick={() => toggleContent(c.key)}
+              className="w-full flex items-center gap-2.5 py-1.5 text-sm text-left">
+              <span className={`h-4 w-4 rounded flex items-center justify-center shrink-0 ${c.on ? 'bg-secondary' : 'border border-slate-300'}`}>
                 {c.on && <Check size={11} className="text-white" strokeWidth={3} />}
               </span>
               <span className={c.on ? 'text-slate-600' : 'text-slate-400'}>{c.label}</span>
-            </div>
+            </button>
           ))}
-          <button type="button" className="w-full flex items-center justify-center gap-2 bg-primary text-white rounded-lg py-2.5 text-sm font-medium mt-4 hover:bg-primary/90">
+          <button type="button" onClick={generateReport}
+            className="w-full flex items-center justify-center gap-2 bg-primary text-white rounded-lg py-2.5 text-sm font-medium mt-4 hover:bg-primary/90">
             <Download size={15} /> Générer le rapport
           </button>
         </Card>
@@ -678,6 +912,14 @@ function Reports() {
 /* ════════════════ MODALE — RÉAFFECTATION ════════════════ */
 function ReassignModal({ ticket, onClose }) {
   const [selected, setSelected] = useState(2)
+
+  const confirm = () => {
+    const target = REASSIGN_TARGETS[selected]
+    // TODO API : POST /api/tickets/{ticket.number}/reassign/ { target: target.name }
+    toast.success(`Ticket ${ticket.number} réaffecté à ${target.name} (simulation)`)
+    onClose()
+  }
+
   return (
     <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" onClick={onClose}>
       <div className="w-full max-w-lg bg-white rounded-2xl shadow-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
@@ -728,7 +970,7 @@ function ReassignModal({ ticket, onClose }) {
 
         <div className="flex gap-2.5 px-5 py-4 border-t border-slate-100">
           <button type="button" onClick={onClose} className="flex-1 bg-white border border-slate-200 text-slate-600 rounded-lg py-2.5 text-sm font-medium hover:bg-slate-50">Annuler</button>
-          <button type="button" onClick={onClose} className="flex-1 flex items-center justify-center gap-2 bg-primary text-white rounded-lg py-2.5 text-sm font-medium hover:bg-primary/90">
+          <button type="button" onClick={confirm} className="flex-1 flex items-center justify-center gap-2 bg-primary text-white rounded-lg py-2.5 text-sm font-medium hover:bg-primary/90">
             <Check size={15} /> Confirmer la réaffectation
           </button>
         </div>
