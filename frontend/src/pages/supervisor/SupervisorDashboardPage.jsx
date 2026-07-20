@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
+import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
   LayoutDashboard, ArrowUpCircle, AlarmClock, Users, FileText,
@@ -73,6 +74,7 @@ function Stars({ value }) {
 function SupervisorDashboardPage() {
   const user = useSelector((state) => state.auth.user)
   const dispatch = useDispatch()
+  const navigate = useNavigate()
   const [section, setSection] = useState('overview')
   const [reassign, setReassign] = useState(null) // { number, title } | null
 
@@ -132,6 +134,14 @@ function SupervisorDashboardPage() {
               </button>
             )
           })}
+          <button
+            type="button"
+            onClick={() => navigate('/supervisor/profil')}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50"
+          >
+            <User size={16} />
+            Mon profil
+          </button>
         </nav>
 
         <div className="px-4 py-4 border-t border-slate-100 flex items-center gap-2.5">
@@ -497,7 +507,7 @@ function Escalations({ onReassign, notifications, onMarkRead, onMarkAllRead }) {
                 <div>
                   <p className="text-xs text-slate-400">{e.number} · {e.date}</p>
                   <p className="font-semibold text-slate-800 mt-0.5">{e.title}</p>
-                  <p className="flex items-center gap-1.5 text-xs text-slate-500 mt-1"><User size={12} />{e.client} · {e.company}</p>
+                  {/* identité client masquée */}
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
                   <PriorityBadge priority={e.priority} />
@@ -576,7 +586,7 @@ function EscalationDetailModal({ escalation, onClose }) {
             <p className="text-xs text-slate-400">{escalation.number} · {escalation.date}</p>
             <p className="font-semibold text-slate-800 mt-0.5">{escalation.title}</p>
             <p className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
-              <User size={12} />{escalation.client} · {escalation.company}
+              <User size={12} />Client (identité masquée)
             </p>
           </div>
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 shrink-0">
@@ -695,7 +705,7 @@ function SlaSupervision({ onReassign, notifications, onMarkRead, onMarkAllRead }
               {rows.map((t) => (
                 <tr key={t.number} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
                   <td className="px-4 py-3"><p className="font-semibold text-slate-800 text-sm">{t.number}</p><p className="text-xs text-slate-400">{t.title}</p></td>
-                  <td className="px-4 py-3 text-sm text-slate-600">{t.client}</td>
+                  <td className="px-4 py-3 text-sm text-slate-400">—</td>
                   <td className="px-4 py-3"><span className="flex items-center gap-2 text-sm text-slate-600"><Avatar initials={t.agent.initials} color={t.agent.color} size={26} />{t.agent.name}</span></td>
                   <td className="px-4 py-3"><PriorityBadge priority={t.priority} /></td>
                   <td className="px-4 py-3"><SlaBar createdAt={t.createdAt} slaDeadline={t.slaDeadline} priority={t.priority} /></td>
@@ -724,8 +734,8 @@ function Team() {
         <button
           type="button"
           onClick={() => {
-            // TODO API : GET /api/supervisor/reports/export/?format=csv&section=team
-            toast.success("Export CSV de la performance d'équipe généré (simulation)")
+            // TODO API : GET /api/supervisor/reports/export/?format=pdf&section=team
+            toast.success("Export PDF de la performance d'équipe généré (simulation)")
           }}
           className="hidden sm:flex items-center gap-1.5 text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50"
         >
@@ -745,7 +755,7 @@ function Team() {
             <BarChart data={chargeData} margin={{ top: 15, right: 8, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" vertical={false} />
               <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
               <Tooltip cursor={{ fill: '#f8fafc' }} />
               <Bar dataKey="load" radius={[5, 5, 0, 0]}>
                 {chargeData.map((d, i) => <Cell key={i} fill={d.load >= 14 ? COLORS.accent : COLORS.secondary} />)}
@@ -812,7 +822,7 @@ function Reports({ notifications, onMarkRead, onMarkAllRead }) {
     { key: 'escalations', label: 'Détail des tickets escaladés', on: true },
     { key: 'ai', label: 'Distribution des classifications IA', on: false },
   ])
-  const FORMATS = ['PDF', 'Excel', 'CSV']
+  const FORMATS = ['PDF', 'Excel']
   const AGENT_OPTIONS = ['Tous les agents', ...MOCK_AGENTS.map((a) => a.name)]
 
   const toggleContent = (key) =>
@@ -835,7 +845,7 @@ function Reports({ notifications, onMarkRead, onMarkAllRead }) {
 
   return (
     <>
-      <TopBar title="Rapports & exports" desc="Générer un rapport de performance filtré au format PDF, Excel ou CSV">
+      <TopBar title="Rapports & exports" desc="Générer un rapport de performance filtré au format PDF ou Excel">
         <NotificationBell notifications={notifications} onMarkRead={onMarkRead} onMarkAllRead={onMarkAllRead} />
       </TopBar>
 

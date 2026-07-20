@@ -14,6 +14,7 @@ import TicketDetailPage from './pages/TicketDetailPage'
 import ProtectedRoute from './routes/ProtectedRoute'
 import { fetchMe } from './store/authSlice'
 import { getAccessToken } from './api/tokenStorage'
+import SupervisorProfilePage from './pages/SupervisorProfilePage'
 import AgentProfilePage from './pages/AgentProfilePage'
 import AgentStatsPage from './pages/AgentStatsPage'
 import ClientProfilePage from './pages/ClientProfilePage'
@@ -108,6 +109,7 @@ function App() {
           </ProtectedRoute>
         }
       />
+      <Route path="/supervisor/profil" element={<ProtectedRoute><SupervisorProfilePage /></ProtectedRoute>} />
       <Route
         path="/agent/profil"
         element={
