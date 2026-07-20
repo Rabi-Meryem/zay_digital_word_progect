@@ -1,0 +1,230 @@
+import { useEffect, useState } from 'react'
+import toast from 'react-hot-toast'
+import { User, Mail, Phone, Shield, KeyRound, Save } from 'lucide-react'
+import {
+  fetchMyProfile,
+  updateMyProfile,
+  sendAdminRequest,
+} from '../../api/profileService'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Panneau « Mon profil » — partagé par les 4 rôles (client, agent, superviseur).
+// L'utilisateur voit ses infos et modifie SEULEMENT : prénom, nom, téléphone.
+//   • Le RÔLE et le MOT DE PASSE sont en lecture seule → gérés par l'admin.
+//   • Pour les changer, il envoie une demande à l'administrateur (formulaire).
+// Aligné sur le vrai UserSerializer : { first_name, last_name, email, phone,
+// role:{name}, ... } et PATCH /api/auth/me/ (ProfileUpdateSerializer).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ROLE_LABELS = {
+  CLIENT: 'Client',
+  AGENT: 'Agent support',
+  SUPERVISOR: 'Superviseur',
+  ADMIN: 'Administrateur',
+}
+
+function ProfilePanel() {
+  const [profile, setProfile] = useState(null)
+  const [form, setForm] = useState({ first_name: '', last_name: '', phone: '' })
+  const [saving, setSaving] = useState(false)
+  const [requestType, setRequestType] = useState(null) // 'ROLE' | 'PASSWORD' | null
+  const [requestMsg, setRequestMsg] = useState('')
+
+  // Chargement du profil réel ; repli silencieux sur un profil de démo si la
+  // route échoue (backend indisponible), pour rester navigable sans serveur.
+  useEffect(() => {
+    fetchMyProfile()
+      .then((data) => {
+        setProfile(data)
+        setForm({
+          first_name: data.first_name ?? '',
+          last_name: data.last_name ?? '',
+          phone: data.phone ?? '',
+        })
+      })
+      .catch(() => {
+        const demo = {
+          first_name: 'Sara', last_name: 'Benali',
+          email: 'sara.benali@exemple.ma', phone: '0600000000',
+          role: { name: 'CLIENT' },
+        }
+        setProfile(demo)
+        setForm({ first_name: demo.first_name, last_name: demo.last_name, phone: demo.phone })
+      })
+  }, [])
+
+  const roleName = profile?.role?.name ?? 'CLIENT'
+  const roleLabel = ROLE_LABELS[roleName] ?? roleName
+
+  const dirty =
+    profile &&
+    (form.first_name !== (profile.first_name ?? '') ||
+      form.last_name !== (profile.last_name ?? '') ||
+      form.phone !== (profile.phone ?? ''))
+
+  const onSave = async () => {
+    if (!form.first_name.trim() || !form.last_name.trim()) {
+      toast.error('Le prénom et le nom sont obligatoires.')
+      return
+    }
+    setSaving(true)
+    try {
+      const updated = await updateMyProfile(form)
+      setProfile(updated)
+      toast.success('Profil mis à jour.')
+    } catch {
+      // En l'absence de backend, on met à jour l'affichage localement.
+      setProfile((p) => ({ ...p, ...form }))
+      toast.success('Profil mis à jour (simulation).')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const submitRequest = async () => {
+    if (!requestMsg.trim()) {
+      toast.error('Merci de préciser votre demande.')
+      return
+    }
+    await sendAdminRequest({ type: requestType, message: requestMsg })
+    toast.success(
+      requestType === 'ROLE'
+        ? 'Demande de changement de rôle envoyée à l’administrateur.'
+        : 'Demande de réinitialisation du mot de passe envoyée à l’administrateur.'
+    )
+    setRequestType(null)
+    setRequestMsg('')
+  }
+
+  if (!profile) {
+    return <p className="text-sm text-slate-400 p-6">Chargement du profil…</p>
+  }
+
+  return (
+    <div className="max-w-2xl space-y-4">
+      {/* Carte 1 — Informations personnelles (modifiables) */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5">
+        <h2 className="text-base font-semibold text-slate-800 mb-1">Mes informations</h2>
+        <p className="text-xs text-slate-400 mb-4">
+          Vous pouvez modifier votre prénom, votre nom et votre téléphone.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label="Prénom" icon={User}>
+            <input
+              type="text" value={form.first_name}
+              onChange={(e) => setForm({ ...form, first_name: e.target.value })}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+            />
+          </Field>
+          <Field label="Nom" icon={User}>
+            <input
+              type="text" value={form.last_name}
+              onChange={(e) => setForm({ ...form, last_name: e.target.value })}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+            />
+          </Field>
+          <Field label="Téléphone" icon={Phone}>
+            <input
+              type="tel" value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+              placeholder="0600000000"
+            />
+          </Field>
+          <Field label="Email (non modifiable)" icon={Mail}>
+            <input
+              type="email" value={profile.email ?? ''} disabled
+              className="w-full border border-slate-200 bg-slate-50 text-slate-400 rounded-lg px-3 py-2 text-sm cursor-not-allowed"
+            />
+          </Field>
+        </div>
+
+        <button
+          type="button" onClick={onSave} disabled={!dirty || saving}
+          className="mt-4 flex items-center gap-2 bg-primary text-white rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-40 hover:bg-primary/90"
+        >
+          <Save size={15} /> {saving ? 'Enregistrement…' : 'Enregistrer'}
+        </button>
+      </div>
+
+      {/* Carte 2 — Rôle & mot de passe (lecture seule + demande admin) */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5">
+        <h2 className="text-base font-semibold text-slate-800 mb-1">
+          Rôle et sécurité
+        </h2>
+        <p className="text-xs text-slate-400 mb-4">
+          Le rôle et le mot de passe sont gérés par l’administrateur. Vous ne
+          pouvez pas les modifier vous-même : envoyez une demande.
+        </p>
+
+        <div className="flex items-center gap-2 text-sm text-slate-700 mb-2">
+          <Shield size={15} className="text-slate-400" />
+          Rôle actuel : <span className="font-medium">{roleLabel}</span>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-slate-700 mb-4">
+          <KeyRound size={15} className="text-slate-400" />
+          Mot de passe : <span className="font-medium">••••••••</span>
+        </div>
+
+        <div className="flex gap-2 flex-wrap">
+          <button
+            type="button" onClick={() => { setRequestType('ROLE'); setRequestMsg('') }}
+            className="text-xs font-medium border border-slate-200 rounded-lg px-3 py-2 hover:bg-slate-50"
+          >
+            Demander un changement de rôle
+          </button>
+          <button
+            type="button" onClick={() => { setRequestType('PASSWORD'); setRequestMsg('') }}
+            className="text-xs font-medium border border-slate-200 rounded-lg px-3 py-2 hover:bg-slate-50"
+          >
+            Demander la réinitialisation du mot de passe
+          </button>
+        </div>
+
+        {requestType && (
+          <div className="mt-4 border-t border-slate-100 pt-4">
+            <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+              {requestType === 'ROLE'
+                ? 'Précisez le rôle souhaité et la raison'
+                : 'Précisez votre demande (le nouveau mot de passe vous sera communiqué par l’administrateur)'}
+            </label>
+            <textarea
+              rows={3} value={requestMsg}
+              onChange={(e) => setRequestMsg(e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+              placeholder="Votre message à l’administrateur…"
+            />
+            <div className="flex gap-2 mt-2">
+              <button
+                type="button" onClick={submitRequest}
+                className="bg-primary text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-primary/90"
+              >
+                Envoyer la demande
+              </button>
+              <button
+                type="button" onClick={() => setRequestType(null)}
+                className="text-slate-500 rounded-lg px-3 py-2 text-sm hover:bg-slate-50"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Field({ label, icon: Icon, children }) {
+  return (
+    <div>
+      <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 mb-1.5">
+        <Icon size={12} className="text-slate-400" /> {label}
+      </label>
+      {children}
+    </div>
+  )
+}
+
+export default ProfilePanel
