@@ -9,10 +9,10 @@ from datetime import timedelta
 from notifications.services import notification_service
 
 
-from users.models import User, LoginHistory
+from users.models import User, LoginHistory ,Role
 from users.serializers import (
     UserSerializer, UserListSerializer, UserCreateSerializer,
-    UserUpdateSerializer, PasswordResetSerializer, ProfileUpdateSerializer
+    UserUpdateSerializer, PasswordResetSerializer, ProfileUpdateSerializer,RoleSerializer
 )
 from users.permissions import IsAdminRole, IsAdminOrSupervisor
 from users.filters import UserFilter
@@ -445,3 +445,10 @@ class PasswordResetView(APIView):
             )
             return Response({'detail': 'Mot de passe réinitialisé avec succès.'})
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+class RoleListView(APIView):
+    """GET /api/roles/ — liste des rôles réels avec leurs vrais IDs."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        roles = Role.objects.all().order_by('id')
+        return Response(RoleSerializer(roles, many=True).data)

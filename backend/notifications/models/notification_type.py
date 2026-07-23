@@ -22,6 +22,12 @@ class NotificationType(models.Model):
         blank=True,
         null=True,
     )
+    email_enabled = models.BooleanField(
+        default=True
+    )
+    in_app_enabled = models.BooleanField(
+        default=True
+    )
 
     class Meta:
         db_table = "notification_types"

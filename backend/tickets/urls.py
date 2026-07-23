@@ -25,7 +25,8 @@ from tickets.views_history import (
 from tickets.views_dashboard import (
     SupervisorKpisView, SupervisorVolumeView,
     SupervisorStatusDistributionView, SupervisorAiClassificationView,
-    SupervisorSlaTicketsView,SupervisorAgentsPerformanceView
+    SupervisorSlaTicketsView, SupervisorAgentsPerformanceView,
+    AgentMyStatsView,
 )
 
  
@@ -129,6 +130,7 @@ urlpatterns = [
     path('supervisor/status-distribution/', SupervisorStatusDistributionView.as_view(), name='supervisor-status-distribution'),
     path('supervisor/ai-classification/', SupervisorAiClassificationView.as_view(), name='supervisor-ai-classification'),
     path('supervisor/sla-tickets/', SupervisorSlaTicketsView.as_view(), name='supervisor-sla-tickets'),
+    path('agents/me/stats/', AgentMyStatsView.as_view(), name='agent-my-stats'),
     path('supervisor/agents-performance/', SupervisorAgentsPerformanceView.as_view(), name='supervisor-agents-performance'),
 ]
  

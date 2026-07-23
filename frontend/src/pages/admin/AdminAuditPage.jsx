@@ -1,48 +1,64 @@
-// src/pages/admin/AdminAuditPage.jsx  — Écran 3.7 (100% cliquable)
-// Recherche, filtre "suspects uniquement", filtre par type d'action, et
-// bouton Exporter fonctionnel (CSV téléchargé côté navigateur).
-
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { AdminPageHeader } from "../../components/admin/AdminLayout";
 import { toast } from "../../components/admin/toast";
 import { exportToCsv } from "../../utils/exportCsv";
 import { logsApi } from "../../api/adminApi";
-import { mockAuditLog } from "../../api/adminMocks";
+
+const ACTION_TYPES = [
+  ["", "Toutes les actions"],
+  ["LOGIN", "Connexion"], ["LOGIN_FAILED", "Échec de connexion"],
+  ["LOGOUT", "Déconnexion"], ["CREATE", "Création"], ["UPDATE", "Modification"],
+  ["DELETE", "Suppression"], ["ASSIGN", "Affectation"], ["ESCALATE", "Escalade"],
+  ["EMAIL_SENT", "Email envoyé"], ["EMAIL_FAILED", "Échec email"],
+  ["SECURITY_ALERT", "Alerte sécurité"],
+];
 
 export default function AdminAuditPage() {
-  const [logs, setLogs] = useState(mockAuditLog);
+  const [logs, setLogs] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
   const [suspectsOnly, setSuspectsOnly] = useState(false);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [actionType, setActionType] = useState("");
 
   useEffect(() => {
-    logsApi.list().then((res) => setLogs(res.data.results || res.data)).catch(() => {});
-  }, []);
+    const timer = setTimeout(() => load(), 300); // debounce sur la recherche
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suspectsOnly, search, actionType]);
 
-  const filtered = useMemo(
-    () => logs.filter((l) => {
-      if (suspectsOnly && !l.is_suspicious) return false;
-      if (statusFilter && l.status !== statusFilter) return false;
-      if (search && !`${l.user} ${l.action} ${l.target}`.toLowerCase().includes(search.toLowerCase()))
-        return false;
-      return true;
-    }),
-    [logs, suspectsOnly, statusFilter, search]
-  );
-
-  const doExport = () => {
-    if (!filtered.length) { toast.error("Rien à exporter"); return; }
-    exportToCsv(
-      `audit_zay_${new Date().toISOString().slice(0, 10)}.csv`,
-      filtered.map((l) => ({
-        date_heure: l.datetime, utilisateur: l.user, action: l.action,
-        cible: l.target, statut: l.status, suspect: l.is_suspicious ? "Oui" : "Non",
-      }))
-    );
-    toast.success(`${filtered.length} lignes exportées`);
+  const load = () => {
+    setLoading(true);
+    logsApi
+      .list({
+        is_suspicious: suspectsOnly || undefined,
+        search: search || undefined,
+        action_type: actionType || undefined,
+        page_size: 200,
+      })
+      .then((res) => setLogs(res.data.results || []))
+      .then(() => setTotal(res => res)) // no-op, total géré séparément si besoin
+      .catch(() => toast.error("Impossible de charger les logs."))
+      .finally(() => setLoading(false));
   };
 
-  const statuses = [...new Set(logs.map((l) => l.status))];
+  const doExport = () => {
+    if (!logs.length) { toast.error("Rien à exporter"); return; }
+    exportToCsv(
+      `audit_zay_${new Date().toISOString().slice(0, 10)}.csv`,
+      logs.map((l) => ({
+        date_heure: l.created_at,
+        utilisateur: l.user_full_name,
+        email: l.user_email,
+        action: l.action_label,
+        cible: l.target_model ? `${l.target_model} #${l.target_id ?? ""}` : "—",
+        description: l.description,
+        ip: l.ip_address,
+        suspect: l.is_suspicious ? "Oui" : "Non",
+      }))
+    );
+    toast.success(`${logs.length} lignes exportées`);
+  };
 
   return (
     <>
@@ -60,10 +76,9 @@ export default function AdminAuditPage() {
         <div className="flex gap-3 items-center flex-wrap">
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher…"
             className="flex-1 min-w-[200px] border border-slate-300 rounded px-3 py-2 text-sm" />
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+          <select value={actionType} onChange={(e) => setActionType(e.target.value)}
             className="border border-slate-300 rounded px-3 py-2 text-sm">
-            <option value="">Tous les statuts</option>
-            {statuses.map((s) => <option key={s} value={s}>{s}</option>)}
+            {ACTION_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
           <label className="flex items-center gap-2 text-sm text-slate-600">
             <input type="checkbox" checked={suspectsOnly} onChange={(e) => setSuspectsOnly(e.target.checked)} />
@@ -83,23 +98,31 @@ export default function AdminAuditPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((l, i) => (
-                <tr key={i} className={`border-t border-slate-100 ${l.is_suspicious ? "bg-red-50/40" : ""}`}>
-                  <td className="px-5 py-2.5 font-mono text-slate-500">{l.datetime}</td>
-                  <td className="px-5 py-2.5 text-slate-700">{l.user}</td>
-                  <td className="px-5 py-2.5 text-slate-600">{l.action}</td>
-                  <td className="px-5 py-2.5 text-slate-500">{l.target}</td>
+              {loading ? (
+                <tr><td colSpan={5} className="px-5 py-8 text-center text-slate-400">Chargement…</td></tr>
+              ) : logs.map((l) => (
+                <tr key={l.id} className={`border-t border-slate-100 ${l.is_suspicious ? "bg-red-50/40" : ""}`}>
+                  <td className="px-5 py-2.5 font-mono text-slate-500">
+                    {new Date(l.created_at).toLocaleString("fr-FR")}
+                  </td>
+                  <td className="px-5 py-2.5 text-slate-700">{l.user_full_name}</td>
+                  <td className="px-5 py-2.5 text-slate-600">{l.action_label}</td>
+                  <td className="px-5 py-2.5 text-slate-500">
+                    {l.target_model ? `${l.target_model} #${l.target_id ?? ""}` : "—"}
+                  </td>
                   <td className="px-5 py-2.5">
                     <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
                       l.is_suspicious ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
-                      {l.status}
+                      {l.is_suspicious ? "Suspect" : "OK"}
                     </span>
                   </td>
                 </tr>
               ))}
+              {!loading && !logs.length && (
+                <tr><td colSpan={5} className="px-5 py-8 text-center text-slate-400">Aucune entrée</td></tr>
+              )}
             </tbody>
           </table>
-          {!filtered.length && <div className="px-5 py-8 text-center text-sm text-slate-400">Aucune entrée</div>}
         </div>
       </div>
     </>

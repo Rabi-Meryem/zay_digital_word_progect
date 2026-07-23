@@ -7,18 +7,10 @@
 // (SLARule et SMTPConfiguration n'ont pas de route) -> voir points à remonter
 // à Rabi-Meryem. Ils sont branchés sur des mocks tant que la route n'existe pas.
 
-import axios from "axios";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+import apiClient from "./axiosClient";
 
-const client = axios.create({ baseURL: API_BASE });
-
-// Injection du JWT (même mécanisme que le reste du portail)
-client.interceptors.request.use((config) => {
-  const token = localStorage.getItem("access_token");
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+const client = apiClient;
 
 // ---------- USERS (app users) ----------
 export const usersApi = {
@@ -51,8 +43,10 @@ export const notificationsApi = {
   types: () => client.get("/notifications/types/"),               // NotificationType
   channels: () => client.get("/notifications/channels/"),         // NotificationChannel
   history: () => client.get("/notifications/history/"),           // NotificationHistory
-  toggle: (typeId, channel, enabled) =>
-    client.patch(`/notifications/types/${typeId}/`, { [channel]: enabled }),
+  toggle: (typeId, channel, enabled) =>{
+  const field = channel === 'email' ? 'email_enabled' : 'in_app_enabled'
+  return client.patch(`/notifications/types/${typeId}/`, { [field]: enabled })
+},
 };
 
 // ---------- IA / TICKETS (app tickets) ----------
@@ -66,8 +60,11 @@ export const aiApi = {
 export const slaApi = {
   // Le modèle SLARule existe mais aucune route ne l'expose (cf. récap §4.4).
   // On garde la signature pour brancher dès que la route existe.
-  rules: () => client.get("/sla/rules/"),
-  updateRule: (id, data) => client.patch(`/sla/rules/${id}/`, data),
+  rules: () => client.get("/sla-rules/"),
+  updateRule: (id, data) => client.patch(`/sla-rules/${id}/`, data),
+};
+export const rolesApi = {
+  list: () => client.get("/roles/"),
 };
 
 export default client;

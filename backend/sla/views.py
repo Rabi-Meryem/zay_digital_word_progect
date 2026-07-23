@@ -14,7 +14,7 @@ class SLARuleViewSet(viewsets.ModelViewSet):
     GET    /api/sla-rules/        -> les 4 règles (Critique/Haute/Moyenne/Basse)
     PATCH  /api/sla-rules/{id}/   -> modifier délai / seuil d'alerte / actif
     """
-    queryset = SLARule.objects.all().order_by('resolution_hours')
+    queryset = SLARule.objects.all().order_by('plan', 'resolution_hours')
     serializer_class = SLARuleSerializer
     permission_classes = [IsAdminOrSupervisor]
     pagination_class = None  # liste fixe (4 lignes), pas besoin de StandardPagination ici

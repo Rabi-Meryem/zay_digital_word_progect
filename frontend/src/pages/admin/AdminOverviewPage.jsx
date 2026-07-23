@@ -26,11 +26,23 @@ export default function AdminOverviewPage() {
   const [stats, setStats] = useState(mockLogStats);
 
   useEffect(() => {
-    logsApi
-      .stats()
-      .then((res) => setStats(res.data))
-      .catch(() => {}); // TODO API: garde le mock si l'endpoint est indispo
-  }, []);
+  logsApi.stats()
+    .then((res) => {
+      const d = res.data;
+      setStats({
+        connexions_aujourdhui: d.logins_today,
+        echecs_aujourdhui: d.failures_today,
+        alertes_securite: d.security_alerts,
+        top_ips: d.suspicious_ips.map((x) => ({ ip: x.ip_address, echecs: x.failures })),
+        dernieres_alertes: d.last_alerts.map((a) => ({
+          heure: new Date(a.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+          description: a.description,
+          ip: a.ip_address,
+        })),
+      });
+    })
+    .catch(() => {});
+}, []);
 
   return (
     <>
@@ -59,8 +71,8 @@ export default function AdminOverviewPage() {
                 </tr>
               </thead>
               <tbody>
-                {stats.top_ips.map((row) => (
-                  <tr key={row.ip} className="border-b border-slate-50">
+                 {(stats.top_ips ?? []).map((row) => (
+                    <tr key={row.ip} className="border-b border-slate-50">
                     <td className="px-5 py-2 font-mono text-slate-700">{row.ip}</td>
                     <td className="px-5 py-2 text-right font-semibold text-red-600">
                       {row.echecs}
@@ -77,7 +89,7 @@ export default function AdminOverviewPage() {
               Dernières alertes sécurité
             </div>
             <ul className="divide-y divide-slate-50">
-              {stats.dernieres_alertes.map((a, i) => (
+                {(stats.dernieres_alertes ?? []).map((a, i) => (
                 <li key={i} className="px-5 py-3 text-sm">
                   <div className="flex justify-between">
                     <span className="text-slate-700">{a.description}</span>

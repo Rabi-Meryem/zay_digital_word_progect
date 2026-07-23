@@ -56,3 +56,7 @@ export const sendBackEscalation = async (id) => {
   const { data } = await apiClient.post(`/escalations/${id}/send-back/`)
   return data
 }
+export const reassignTicket = async (ticketId, agentId, note) => {
+  const { data } = await apiClient.post(`/tickets/${ticketId}/assign/`, { agent_id: agentId, note })
+  return data
+}

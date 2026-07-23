@@ -3,7 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
- 
+from tickets.views_attachments import save_ticket_attachment
 from tickets.models import Ticket, TicketStatusHistory
 from tickets.serializers import (
     TicketCreateSerializer, TicketListSerializer,
@@ -18,6 +18,7 @@ from users.permissions import (
     IsClient, IsAgent, IsSupervisor,
     IsAdminOrSupervisor, IsAgentOrSupervisor
 )
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
  
  
 # ─── Helper : récupérer un ticket ou renvoyer 404 ───────────────────────────
@@ -44,7 +45,7 @@ class TicketListCreateView(APIView):
     POST : Seul le client peut créer un ticket.
     """
     permission_classes = [IsAuthenticated]
- 
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     def get(self, request):
         user = request.user
         role = user.role.name
@@ -123,7 +124,20 @@ class TicketListCreateView(APIView):
                 {'detail': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
- 
+ # ── Pièces jointes envoyées avec la création (champ "attachments") ──
+        files = request.FILES.getlist('attachments')
+        rejected = []
+        for f in files:
+            try:
+                save_ticket_attachment(ticket, request.user, f)
+            except ValueError as e:
+                rejected.append({'file': f.name, 'reason': str(e)})
+
+        response_data = TicketDetailSerializer(ticket).data
+        if rejected:
+            response_data['attachments_rejected'] = rejected
+
+        return Response(response_data, status=status.HTTP_201_CREATED)
         return Response(
             TicketDetailSerializer(ticket).data,
             status=status.HTTP_201_CREATED

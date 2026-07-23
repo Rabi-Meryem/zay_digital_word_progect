@@ -11,7 +11,7 @@ from tickets.models import Ticket
 from tickets.services import ticket_service
 from .models import Escalation
 from .serializers import EscalationSerializer, EscalationReassignSerializer
-
+from users.permissions import IsAdminOrSupervisor, IsAdminRole
 
 def get_escalation_or_404(pk, supervisor):
     try:
@@ -23,13 +23,15 @@ def get_escalation_or_404(pk, supervisor):
 
 
 class EscalationListView(APIView):
-    """GET /api/escalations/?state=pending|taken"""
     permission_classes = [IsAuthenticated, IsAdminOrSupervisor]
 
     def get(self, request):
-        queryset = Escalation.objects.filter(
-            supervisor=request.user
-        ).select_related('ticket', 'ticket__client', 'escalated_by', 'supervisor')
+        queryset = Escalation.objects.select_related(
+            'ticket', 'ticket__client', 'escalated_by', 'supervisor'
+        )
+        # Le superviseur ne voit que ses propres escalades ; l'admin voit tout.
+        if request.user.role.name == 'SUPERVISOR':
+            queryset = queryset.filter(supervisor=request.user)
 
         state = request.GET.get('state')
         if state == 'pending':
@@ -39,7 +41,6 @@ class EscalationListView(APIView):
 
         queryset = queryset.order_by('-escalation_date')
         return Response(EscalationSerializer(queryset, many=True).data)
-
 
 class EscalationTakeView(APIView):
     """POST /api/escalations/<id>/take/ — le superviseur prend en charge."""
@@ -97,6 +98,26 @@ class EscalationSendBackView(APIView):
         ticket_service.assign_ticket(
             ticket=escalation.ticket, agent=escalation.escalated_by, assigned_by=request.user
         )
+        escalation.resolved = True
+        escalation.save(update_fields=['resolved'])
+        return Response(EscalationSerializer(escalation).data)
+    
+class EscalationResolveView(APIView):
+    """
+    POST /api/escalations/<id>/resolve/
+    Vue ADMIN : marque une escalade comme traitée, sans réaffecter le ticket
+    (contrairement à EscalationTakeView qui est l'action du superviseur).
+    """
+    permission_classes = [IsAuthenticated, IsAdminRole]
+
+    def post(self, request, pk):
+        try:
+            escalation = Escalation.objects.select_related(
+                'ticket', 'ticket__client', 'escalated_by', 'supervisor'
+            ).get(pk=pk)
+        except Escalation.DoesNotExist:
+            return Response({'detail': 'Escalade introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+
         escalation.resolved = True
         escalation.save(update_fields=['resolved'])
         return Response(EscalationSerializer(escalation).data)

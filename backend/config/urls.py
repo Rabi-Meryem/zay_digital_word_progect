@@ -27,6 +27,7 @@ urlpatterns = [
     path('api/', include('escalation.urls')),
     path('api/', include('reports.urls')),
     path('api/', include('notifications.urls')),
+    path('api/', include('integrations.urls')),
 ]
  
 

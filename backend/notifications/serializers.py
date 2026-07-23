@@ -1,5 +1,7 @@
 from rest_framework import serializers
-from notifications.models import Notification
+from notifications.models import (
+    Notification, NotificationType, NotificationChannel, NotificationHistory,
+)
 
 
 class NotificationSerializer(serializers.ModelSerializer):
@@ -12,3 +14,28 @@ class NotificationSerializer(serializers.ModelSerializer):
 
     def get_ticket_number(self, obj):
         return obj.ticket.ticket_number if obj.ticket else None
+
+
+class NotificationTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NotificationType
+        fields = ['id', 'name', 'description', 'email_enabled', 'in_app_enabled']
+
+
+class NotificationChannelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NotificationChannel
+        fields = ['id', 'name', 'description', 'active']
+
+
+class NotificationHistorySerializer(serializers.ModelSerializer):
+    channel_name = serializers.CharField(source='channel.name', read_only=True)
+    notification_title = serializers.CharField(source='notification.title', read_only=True)
+    recipient = serializers.CharField(source='notification.user.email', read_only=True)
+
+    class Meta:
+        model = NotificationHistory
+        fields = [
+            'id', 'notification', 'notification_title', 'recipient',
+            'channel_name', 'status', 'sent_at', 'error_message', 'created_at',
+        ]

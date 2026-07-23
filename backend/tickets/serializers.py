@@ -247,3 +247,33 @@ class TicketRateSerializer(serializers.Serializer):
 class TicketStatusUpdateSerializer(serializers.Serializer):
     current_status = serializers.ChoiceField(choices=Ticket.Status.choices)
     reason         = serializers.CharField(required=False, allow_blank=True)
+class TicketListSerializer(serializers.ModelSerializer):
+    client         = UserShortSerializer(read_only=True)
+    assigned_agent = UserShortSerializer(read_only=True)
+    sla_remaining  = serializers.SerializerMethodField()
+    sla_status     = serializers.SerializerMethodField()
+    rating         = serializers.SerializerMethodField()   # ← ajouté
+
+    class Meta:
+        model  = Ticket
+        fields = [
+            'id', 'ticket_number', 'title',
+            'current_status', 'priority', 'ai_priority',
+            'source', 'client', 'assigned_agent',
+            'sla_deadline', 'sla_remaining', 'sla_status',
+            'is_sla_respected', 'created_at', 'updated_at',
+            'resolved_at', 'first_response_at',            # ← ajoutés
+            'rating',                                       # ← ajouté
+        ]
+
+    def get_sla_remaining(self, obj):
+        ...  # inchangé
+
+    def get_sla_status(self, obj):
+        ...  # inchangé
+
+    def get_rating(self, obj):
+        try:
+            return obj.rating.rating
+        except Exception:
+            return None

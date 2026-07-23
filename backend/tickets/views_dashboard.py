@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Avg, Count, Q, F
+from django.db.models.functions import TruncMonth
 from users.models import User
 from users.permissions import IsAdminOrSupervisor
 from tickets.models import Ticket, TicketRating
@@ -128,6 +129,7 @@ class SupervisorSlaTicketsView(APIView):
                 continue
 
             results.append({
+                'id': t.id,
                 'number': t.ticket_number,
                 'title': t.title,
                 'client': f"{t.client.first_name} {t.client.last_name}",
@@ -209,3 +211,76 @@ class SupervisorAgentsPerformanceView(APIView):
         h = int(seconds // 3600)
         m = int((seconds % 3600) // 60)
         return f"{h}h {m:02d}"
+class AgentMyStatsView(APIView):
+    """GET /api/agents/me/stats/?months=6 — stats personnelles de l'agent connecté"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        agent = request.user
+        months = int(request.GET.get('months', 6))
+        now = timezone.now()
+
+        start_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        for _ in range(months - 1):
+            start_month = (start_month - timedelta(days=1)).replace(day=1)
+
+        resolved_qs = Ticket.objects.filter(
+            assigned_agent=agent,
+            current_status__in=[Ticket.Status.RESOLVED, Ticket.Status.CLOSED],
+            resolved_at__gte=start_month,
+        )
+
+        monthly_data = (
+            resolved_qs
+            .annotate(month=TruncMonth('resolved_at'))
+            .values('month')
+            .annotate(resolved=Count('id'))
+            .order_by('month')
+        )
+        resolved_by_month = {row['month'].strftime('%Y-%m'): row['resolved'] for row in monthly_data}
+
+        labels_fr = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
+        monthly = []
+        cursor = start_month
+        for _ in range(months):
+            key = cursor.strftime('%Y-%m')
+
+            month_qs = resolved_qs.filter(
+                resolved_at__year=cursor.year, resolved_at__month=cursor.month
+            )
+            durations = month_qs.exclude(assigned_at__isnull=True).annotate(
+                duration=F('resolved_at') - F('assigned_at')
+            ).values_list('duration', flat=True)
+            durations = [d for d in durations if d is not None]
+            avg_hours = round(
+                sum(d.total_seconds() for d in durations) / len(durations) / 3600, 1
+            ) if durations else 0
+
+            avg_rating = month_qs.filter(rating__isnull=False).aggregate(
+                avg=Avg('rating__rating')
+            )['avg'] or 0
+
+            monthly.append({
+                'month': labels_fr[cursor.month - 1],
+                'resolved': resolved_by_month.get(key, 0),
+                'avg_hours': avg_hours,
+                'satisfaction': round(avg_rating, 1),
+            })
+
+            if cursor.month == 12:
+                cursor = cursor.replace(year=cursor.year + 1, month=1)
+            else:
+                cursor = cursor.replace(month=cursor.month + 1)
+
+        total_resolved = sum(m['resolved'] for m in monthly)
+        last = monthly[-1] if monthly else {'resolved': 0, 'avg_hours': 0, 'satisfaction': 0}
+
+        return Response({
+            'monthly': monthly,
+            'totals': {
+                'totalResolved': total_resolved,
+                'lastResolved': last['resolved'],
+                'lastAvg': last['avg_hours'],
+                'lastSat': last['satisfaction'],
+            },
+        })

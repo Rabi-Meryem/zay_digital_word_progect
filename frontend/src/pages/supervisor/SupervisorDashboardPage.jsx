@@ -21,8 +21,10 @@ import {
   fetchSupervisorKpis, fetchSupervisorVolume, fetchStatusDistribution,
   fetchAiClassification, fetchSlaTickets, fetchAgentsPerformance,
   fetchAgents, fetchEscalations, takeEscalation, reassignEscalation, sendBackEscalation,
+  reassignTicket,
 } from '../../api/supervisor'
 import { downloadReport } from '../../api/reports'
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Espace Superviseur — Écrans 3.x (Vue d'ensemble, Escalades, Supervision SLA,
@@ -509,7 +511,7 @@ function Escalations({ onReassign }) {
                   <p className="text-xs text-slate-400">{e.ticket_number} · {new Date(e.escalation_date).toLocaleDateString('fr-FR')}</p>
                   <p className="font-semibold text-slate-800 mt-0.5">{e.ticket_title}</p>
                   <p className="flex items-center gap-1.5 text-xs text-slate-500 mt-1"><User size={12} />{e.client_name}</p>
-                    (feat(supervisor): dashboard superviseur complet + SLA, escalades, notifications, rapports)
+                    
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
                   <PriorityBadge priority={e.priority} />
@@ -544,7 +546,7 @@ function Escalations({ onReassign }) {
                   <>
                     <button type="button" onClick={() => handleTake(e.id)}
                       className="text-xs font-medium bg-primary text-white rounded-lg px-3 py-2 hover:bg-primary/90">Prendre en charge</button>
-                    <button type="button" onClick={() => onReassign({ id: e.id, number: e.ticket_number, title: e.ticket_title })}
+                    <button type="button" onClick={() => onReassign({ id: e.id, number: e.ticket_number, title: e.ticket_title, isEscalation: true  })}
                       className="flex items-center gap-1.5 text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50">
                       <ArrowLeftRight size={14} /> Réaffecter
                     </button>
@@ -704,7 +706,7 @@ function SlaSupervision({ onReassign }) {
                 <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-200">
                   <th className="px-4 py-3">Ticket</th><th className="px-4 py-3">Client</th><th className="px-4 py-3">Agent</th>
                   <th className="px-4 py-3">Priorité</th><th className="px-4 py-3 w-1/4">SLA</th><th className="px-4 py-3" />
-            (feat(supervisor): dashboard superviseur complet + SLA, escalades, notifications, rapports)
+           
                 </tr>
               </thead>
               <tbody>
@@ -722,7 +724,7 @@ function SlaSupervision({ onReassign }) {
                     <td className="px-4 py-3"><PriorityBadge priority={t.priority} /></td>
                     <td className="px-4 py-3"><SlaBar createdAt={t.createdAt} slaDeadline={t.slaDeadline} priority={t.priority} /></td>
                     <td className="px-4 py-3 text-right">
-                      <button type="button" onClick={() => onReassign({ number: t.number, title: t.title })}
+                      <button type="button" onClick={() => onReassign({ id: t.id, number: t.number, title: t.title, isEscalation: false })}
                         className="text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-1.5 hover:bg-slate-50 whitespace-nowrap">Réaffecter</button>
                     </td>
                   </tr>
@@ -759,15 +761,19 @@ function Team() {
     <>
       <TopBar title="Performance de l'équipe" desc="Charge, délais et satisfaction par agent · 30 derniers jours">
         <button
-          type="button"
-          onClick={() => {
-            // TODO API : GET /api/supervisor/reports/export/?format=pdf&section=team
-            toast.success("Export PDF de la performance d'équipe généré (simulation)")
-          }}
-          className="hidden sm:flex items-center gap-1.5 text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50"
-        >
-          <Download size={14} /> Exporter
-        </button>
+  type="button"
+  onClick={async () => {
+    try {
+      await downloadReport('pdf', { section: 'team' })
+      toast.success("Export généré.")
+    } catch {
+      toast.error("Échec de l'export.")
+    }
+  }}
+  className="hidden sm:flex items-center gap-1.5 text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50"
+>
+  <Download size={14} /> Exporter
+</button>
       </TopBar>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
@@ -869,9 +875,9 @@ function Reports() {
 
   return (
     <>
-      <TopBar title="Rapports & exports" desc="Générer un rapport de performance filtré au format PDF ou Excel">
-        <NotificationBell notifications={notifications} onMarkRead={onMarkRead} onMarkAllRead={onMarkAllRead} />
-      </TopBar>
+     <TopBar title="Rapports & exports" desc="Générer un rapport de performance filtré au format PDF ou Excel">
+  <BellButton />
+</TopBar>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 max-w-4xl">
         <Card title="Paramètres du rapport">
@@ -939,21 +945,27 @@ function ReassignModal({ ticket, onClose }) {
     fetchAgents().then(setAgents).catch(() => toast.error("Impossible de charger les agents."))
   }, [])
 
-  async function confirm() {
-    if (selected == null) return toast.error('Sélectionne un agent.')
-    try {
-      setSaving(true)
-      if (ticket.id) {
-        await reassignEscalation(ticket.id, agents[selected].agent_id, note)
-      }
-      toast.success('Ticket réaffecté.')
-      onClose()
-    } catch (err) {
-      toast.error(err?.response?.data?.detail || 'Échec de la réaffectation.')
-    } finally {
-      setSaving(false)
-    }
+ async function confirm() {
+  if (selected == null) return toast.error('Sélectionne un agent.')
+  if (!ticket.id) {
+    toast.error("Impossible de réaffecter : ticket introuvable (id manquant).")
+    return
   }
+  try {
+    setSaving(true)
+    if (ticket.isEscalation) {
+      await reassignEscalation(ticket.id, agents[selected].agent_id, note)
+    } else {
+      await reassignTicket(ticket.id, agents[selected].agent_id, note)
+    }
+    toast.success('Ticket réaffecté.')
+    onClose()
+  } catch (err) {
+    toast.error(err?.response?.data?.detail || 'Échec de la réaffectation.')
+  } finally {
+    setSaving(false)
+  }
+}
 
   return (
     <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" onClick={onClose}>

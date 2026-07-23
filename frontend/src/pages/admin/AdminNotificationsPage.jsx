@@ -1,58 +1,59 @@
-// src/pages/admin/AdminNotificationsPage.jsx  — Écran 3.6
-// Centre de notifications système. Basé sur NotificationType, NotificationChannel
-// (Email / In-App) et NotificationHistory. Active/désactive chaque canal par type
-// d'événement et consulte l'historique réel des envois.
-
 import { useEffect, useState } from "react";
 import { AdminPageHeader } from "../../components/admin/AdminLayout";
 import { notificationsApi } from "../../api/adminApi";
-import { mockNotifications } from "../../api/adminMocks";
 
 function Toggle({ active, onClick }) {
   return (
-    <button
-      onClick={onClick}
+    <button onClick={onClick}
       className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors ${
-        active ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-400"
-      }`}
-    >
+        active ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-400"}`}>
       {active ? "Actif" : "Inactif"}
     </button>
   );
 }
 
+const STATUS_BADGE = {
+  SENT: "bg-green-100 text-green-700",
+  FAILED: "bg-red-100 text-red-700",
+  PENDING: "bg-slate-100 text-slate-500",
+};
+
 export default function AdminNotificationsPage() {
-  const [data, setData] = useState(mockNotifications);
+  const [types, setTypes] = useState([]);
+  const [channels, setChannels] = useState([]);
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    Promise.all([notificationsApi.types(), notificationsApi.history()])
-      .then(([types, history]) =>
-        setData({
-          canaux_actifs: 2,
-          types: types.data.results || types.data,
-          historique: history.data.results || history.data,
-        })
-      )
-      .catch(() => {});
-  }, []);
-
-  const flip = (typeId, channel) => {
-    setData((prev) => ({
-      ...prev,
-      types: prev.types.map((t) =>
-        t.id === typeId ? { ...t, [channel]: !t[channel] } : t
-      ),
-    }));
-    const type = data.types.find((t) => t.id === typeId);
-    if (type) notificationsApi.toggle(typeId, channel, !type[channel]).catch(() => {});
+  const load = () => {
+    Promise.all([
+      notificationsApi.types(),
+      notificationsApi.channels(),
+      notificationsApi.history(),
+    ])
+      .then(([t, c, h]) => {
+        setTypes(t.data);
+        setChannels(c.data);
+        setHistory(h.data);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   };
+
+  useEffect(load, []);
+
+  const flip = (type, field) => {
+    setTypes((prev) => prev.map((t) => (t.id === type.id ? { ...t, [field]: !t[field] } : t)));
+    const channel = field === "email_enabled" ? "email" : "in_app";
+    notificationsApi.toggle(type.id, channel, !type[field]).catch(() => load());
+  };
+
+  const canauxActifs = channels.filter((c) => c.active).length;
+
+  if (loading) return <div className="p-8 text-slate-400">Chargement…</div>;
 
   return (
     <>
-      <AdminPageHeader
-        title="Notifications système"
-        subtitle={`${data.canaux_actifs} canaux actifs`}
-      />
+      <AdminPageHeader title="Notifications système" subtitle={`${canauxActifs} canaux actifs`} />
       <div className="p-8 space-y-6">
         <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
           <table className="w-full text-sm">
@@ -64,14 +65,14 @@ export default function AdminNotificationsPage() {
               </tr>
             </thead>
             <tbody>
-              {data.types.map((t) => (
+              {types.map((t) => (
                 <tr key={t.id} className="border-t border-slate-100">
-                  <td className="px-5 py-2.5 text-slate-700">{t.label}</td>
+                  <td className="px-5 py-2.5 text-slate-700">{t.description || t.name}</td>
                   <td className="px-5 py-2.5 text-center">
-                    <Toggle active={t.email} onClick={() => flip(t.id, "email")} />
+                    <Toggle active={t.email_enabled} onClick={() => flip(t, "email_enabled")} />
                   </td>
                   <td className="px-5 py-2.5 text-center">
-                    <Toggle active={t.in_app} onClick={() => flip(t.id, "in_app")} />
+                    <Toggle active={t.in_app_enabled} onClick={() => flip(t, "in_app_enabled")} />
                   </td>
                 </tr>
               ))}
@@ -84,12 +85,23 @@ export default function AdminNotificationsPage() {
             Historique d'envoi récent
           </div>
           <ul className="divide-y divide-slate-50">
-            {data.historique.map((h, i) => (
-              <li key={i} className="px-5 py-2.5 text-sm text-slate-600">
-                <span className="font-mono text-slate-400 mr-2">{h.heure}</span>
-                {h.texte}
+            {history.map((h) => (
+              <li key={h.id} className="px-5 py-2.5 text-sm text-slate-600 flex justify-between items-center">
+                <div>
+                  <span className="font-mono text-slate-400 mr-2">
+                    {new Date(h.created_at).toLocaleString("fr-FR")}
+                  </span>
+                  {h.notification_title} → {h.recipient} ({h.channel_name})
+                  {h.status === "FAILED" && h.error_message && (
+                    <span className="text-red-500 text-xs ml-2">— {h.error_message}</span>
+                  )}
+                </div>
+                <span className={`px-2 py-0.5 rounded text-xs font-semibold shrink-0 ml-3 ${STATUS_BADGE[h.status]}`}>
+                  {h.status}
+                </span>
               </li>
             ))}
+            {!history.length && <li className="px-5 py-8 text-center text-slate-400">Aucun envoi récent</li>}
           </ul>
         </div>
       </div>

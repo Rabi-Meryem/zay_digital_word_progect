@@ -6,20 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { ArrowLeft, Paperclip, X, Send, Sparkles } from 'lucide-react'
 import ClientHeader from '../components/layout/ClientHeader'
-import { BLOCS } from '../data/modules'
-import { addMockTicket } from '../data/mockTickets'
-
-// Écran de création d'un ticket (/tickets/nouveau).
-//
-// La criticité n'est pas demandée au client : elle est déterminée par le module
-// IA à partir de la description et du module concerné (voir les champs
-// priority / ai_priority / ai_confidence du modèle Ticket). Le formulaire est
-// donc conçu pour obtenir une description exploitable par le classifieur.
-//
-// ⚠️ La création est locale (voir addMockTicket dans mockTickets.js).
-// TODO API : POST /api/tickets/ avec { title, description, module_concerne, source: 'WEB' }
-// → le backend renvoie le ticket créé avec ticket_number, priority, ai_priority,
-//   ai_confidence et sla_deadline.
+import { createTicket } from '../api/tickets'
 
 const MAX_FICHIERS = 3
 const TAILLE_MAX_MO = 5
@@ -29,7 +16,6 @@ const ticketSchema = z.object({
     .string()
     .min(5, 'Le titre doit faire au moins 5 caractères.')
     .max(255, 'Le titre ne peut pas dépasser 255 caractères.'),
-  module_concerne: z.string().min(1, 'Sélectionne le module concerné.'),
   description: z
     .string()
     .min(30, 'Décris le problème en 30 caractères minimum pour permettre une analyse fiable.'),
@@ -77,15 +63,31 @@ function NewTicketPage() {
 
   const onSubmit = async (values) => {
     setEnvoi(true)
+    try {
+      const ticket = await createTicket({
+        title: values.title,
+        description: values.description,
+        files: fichiers,
+      })
 
-    // TODO API : remplacer par un POST multipart vers /api/tickets/
-    // (les pièces jointes alimentent le modèle TicketAttachment).
-    await new Promise((resolve) => setTimeout(resolve, 500))
+      if (ticket.attachments_rejected?.length) {
+        ticket.attachments_rejected.forEach((r) =>
+          toast.error(`${r.file} : ${r.reason}`)
+        )
+      }
 
-    const ticket = addMockTicket(values)
-    setEnvoi(false)
-    toast.success(`Ticket ${ticket.ticket_number} créé.`)
-    navigate(`/tickets/${ticket.id}`)
+      toast.success(`Ticket ${ticket.ticket_number} créé.`)
+      navigate(`/tickets/${ticket.id}`)
+    } catch (error) {
+      toast.error(
+        error.response?.data?.detail ||
+        error.response?.data?.title?.[0] ||
+        error.response?.data?.description?.[0] ||
+        "Impossible de créer le ticket."
+      )
+    } finally {
+      setEnvoi(false)
+    }
   }
 
   return (
@@ -121,38 +123,6 @@ function NewTicketPage() {
               className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-secondary/40"
             />
             {errors.title && <p className="text-xs text-danger mt-1">{errors.title.message}</p>}
-          </div>
-
-          {/* Module concerné */}
-          <div className="bg-white rounded-lg border border-slate-200 p-4">
-            <label htmlFor="module_concerne" className="block text-sm font-medium text-slate-700 mb-1">
-              Module concerné
-            </label>
-            <select
-              id="module_concerne"
-              {...register('module_concerne')}
-              defaultValue=""
-              className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-secondary/40"
-            >
-              <option value="" disabled>
-                Sélectionner un module…
-              </option>
-              {BLOCS.map((bloc) => (
-                <optgroup key={bloc.cle} label={bloc.label}>
-                  {bloc.modules.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-            {errors.module_concerne && (
-              <p className="text-xs text-danger mt-1">{errors.module_concerne.message}</p>
-            )}
-            <p className="text-[11px] text-slate-400 mt-1.5">
-              Le module permet d'orienter ta demande vers l'agent référent du bloc fonctionnel.
-            </p>
           </div>
 
           {/* Description */}

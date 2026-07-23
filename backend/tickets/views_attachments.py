@@ -46,7 +46,32 @@ def user_can_access_ticket(ticket, user):
         return ticket.assigned_agent == user
     return True  # SUPERVISOR et ADMIN voient tout
  
- 
+def save_ticket_attachment(ticket, user, file):
+    """
+    Valide et enregistre une pièce jointe. Lève ValueError si invalide.
+    Réutilisée par TicketAttachmentUploadView et la création de ticket.
+    """
+    mime_type = file.content_type
+    if mime_type not in ALLOWED_MIME_TYPES:
+        raise ValueError(f"Type de fichier non autorisé : {mime_type}.")
+
+    if file.size > MAX_FILE_SIZE:
+        raise ValueError("Fichier trop volumineux. Maximum : 10 Mo.")
+
+    import uuid
+    ext = os.path.splitext(file.name)[1].lower()
+    unique_name = f"{uuid.uuid4().hex}{ext}"
+
+    return TicketAttachment.objects.create(
+        ticket=ticket,
+        uploaded_by=user,
+        file=file,
+        filename=unique_name,
+        original_name=file.name[:255],
+        file_size=file.size,
+        mime_type=mime_type,
+        file_path=f"tickets/{ticket.id}/attachments/{unique_name}",
+    )
 # ─────────────────────────────────────────────────────────────────────────────
 # POST /api/tickets/<id>/attachments/
 # Uploader une ou plusieurs pièces jointes sur un ticket

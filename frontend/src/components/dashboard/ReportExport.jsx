@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { FileText, Sheet } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { downloadReport } from '../../api/reports'
 
 // Ligne 4 (gauche) : export des rapports.
 //
@@ -18,21 +19,19 @@ function ReportExport() {
   const [periode, setPeriode] = useState('mensuel')
   const [enCours, setEnCours] = useState(null)
 
-  const exporter = async (format) => {
-    setEnCours(format)
-
-    // TODO API : remplacer par
-    // const res = await api.get(`/reports/?format=${format}&periode=${periode}`, { responseType: 'blob' })
-    // const url = URL.createObjectURL(res.data)
-    // const a = document.createElement('a')
-    // a.href = url; a.download = `rapport_${periode}.${format}`; a.click()
-    // URL.revokeObjectURL(url)
-    await new Promise((resolve) => setTimeout(resolve, 600))
-
-    setEnCours(null)
+ const exporter = async (format) => {
+  setEnCours(format)
+  try {
+    const exportFormat = format === 'xlsx' ? 'excel' : format
+    await downloadReport(exportFormat, { periode })
     const libelle = PERIODES.find((p) => p.cle === periode)?.label
     toast.success(`${libelle} — export ${format.toUpperCase()} généré`)
+  } catch {
+    toast.error("Échec de l'export.")
+  } finally {
+    setEnCours(null)
   }
+}
 
   return (
     <div className="bg-white rounded-lg border border-slate-200 p-4">

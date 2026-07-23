@@ -8,7 +8,7 @@ import StatusBadge from '../components/tickets/StatusBadge'
 import SlaBar from '../components/tickets/SlaBar'
 import EscalationModal from '../components/agent/EscalationModal'
 import { useEffect, useMemo, useState } from 'react'
-import { fetchTicket } from '../api/tickets'
+import { fetchTicket, resolveTicket, changeTicketStatus } from '../api/tickets'
 
 // Écran 2.2 — Fiche de traitement détaillée de l'incident (console agent).
 // ⚠️ Le changement de statut / la résolution / l'escalade ne modifient que
@@ -128,18 +128,28 @@ if (loading) {
   const shortNumber = ticket.ticket_number.split('-').pop()
   const isResolved = ['RESOLVED', 'CLOSED'].includes(status)
 
-  const changeStatus = (value) => {
-    setStatus(value)
-    toast.success(
-      `Statut mis à jour : ${STATUS_OPTIONS.find((o) => o.value === value)?.label ?? value} (local, en attente de l'API)`
-    )
+  const changeStatus = async (value) => {
+  if (value === 'ESCALATED') {
+    setShowEscalation(true)
+    return
   }
+  try {
+    const updated = value === 'RESOLVED'
+      ? await resolveTicket(ticket.id)
+      : await changeTicketStatus(ticket.id, value)
+    setTicket(updated)
+    setStatus(updated.current_status)
+    toast.success(`Statut mis à jour : ${STATUS_OPTIONS.find((o) => o.value === value)?.label ?? value}`)
+  } catch (error) {
+    toast.error(error?.response?.data?.detail || "Échec de la mise à jour du statut.")
+  }
+}
 
-  const confirmEscalation = ({ reasonLabel }) => {
-    setShowEscalation(false)
-    setStatus('ESCALATED')
-    toast.success(`Ticket escaladé au superviseur — motif : ${reasonLabel} (simulation)`)
-  }
+  const confirmEscalation = async ({ reasonLabel }) => {
+  setShowEscalation(false)
+  toast.success(`Ticket escaladé au superviseur — motif : ${reasonLabel}`)
+  await loadTicket()
+}
 
   return (
     <div className="min-h-screen bg-slate-50">
