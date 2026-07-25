@@ -18,6 +18,7 @@ import {
 //     l'écran « Mot de passe oublié » (utilisateur non connecté).
 // Aligné sur le vrai UserSerializer : { first_name, last_name, email, phone,
 // role:{name}, ... } et PATCH /api/auth/me/ (ProfileUpdateSerializer).
+// Layout desktop : deux cartes côte à côte sur grand écran, pleine largeur.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ROLE_LABELS = {
@@ -102,9 +103,9 @@ function ProfilePanel() {
   }
 
   return (
-    <div className="max-w-2xl space-y-4">
+    <div className="max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
       {/* Carte 1 — Informations personnelles (modifiables) */}
-      <div className="bg-white border border-slate-200 rounded-xl p-5">
+      <div className="bg-white border border-slate-200 rounded-xl p-6">
         <h2 className="text-base font-semibold text-slate-800 mb-1">Mes informations</h2>
         <p className="text-xs text-slate-400 mb-4">
           Vous pouvez modifier votre prénom, votre nom et votre téléphone.
