@@ -14,9 +14,12 @@ import TicketDetailPage from './pages/TicketDetailPage'
 import ProtectedRoute from './routes/ProtectedRoute'
 import { fetchMe } from './store/authSlice'
 import { getAccessToken } from './api/tokenStorage'
+import SupervisorProfilePage from './pages/SupervisorProfilePage'
+import AgentProfilePage from './pages/AgentProfilePage'
+import AgentStatsPage from './pages/AgentStatsPage'
 import ClientProfilePage from './pages/ClientProfilePage'
-import AdminProfilePage from './pages/AdminProfilePage'
 import AdminUsersPage from './pages/AdminUsersPage'
+import { adminRoutes } from './routes/adminRoutes'
 
 function App() {
   const dispatch = useDispatch()
@@ -106,9 +109,25 @@ function App() {
           </ProtectedRoute>
         }
       />
+      <Route path="/supervisor/profil" element={<ProtectedRoute><SupervisorProfilePage /></ProtectedRoute>} />
+      <Route
+        path="/agent/profil"
+        element={
+          <ProtectedRoute>
+            <AgentProfilePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/agent/stats"
+        element={
+          <ProtectedRoute>
+            <AgentStatsPage />
+          </ProtectedRoute>
+        }
+      />
       <Route path="/profil" element={<ProtectedRoute><ClientProfilePage /></ProtectedRoute>} />
-      <Route path="/admin/profil" element={<ProtectedRoute><AdminProfilePage /></ProtectedRoute>} />
-      <Route path="/admin/utilisateurs" element={<ProtectedRoute><AdminUsersPage /></ProtectedRoute>} /> 
+      {adminRoutes}
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   )

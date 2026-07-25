@@ -16,8 +16,9 @@ function fmtAgo(iso) {
   return `${Math.floor(h / 24)} j`
 }
 
-function initials(client) {
-  return `${client.first_name[0] ?? ''}${client.last_name[0] ?? ''}`.toUpperCase()
+// Avatar neutre basé sur le n° de ticket (l'agent ne voit pas le client).
+function ticketInitials(ticket) {
+  return `T${ticket.ticket_number.split('-').pop().slice(-2)}`
 }
 
 function AgentMessagesPage() {
@@ -66,14 +67,14 @@ function AgentMessagesPage() {
               className="w-full flex items-center gap-3 bg-white border border-slate-200 rounded-xl px-4 py-3 text-left hover:border-secondary/40 transition-colors"
             >
               <span className="h-9 w-9 rounded-full bg-primary text-primary-foreground text-xs font-semibold flex items-center justify-center shrink-0">
-                {initials(ticket.client)}
+                {ticketInitials(ticket)}
               </span>
               <span className="min-w-0 flex-1">
                 <span className="flex items-baseline justify-between gap-2">
                   <span className="text-sm font-medium text-slate-800 truncate">
-                    {ticket.client.first_name} {ticket.client.last_name}
+                    Ticket #{ticket.ticket_number.split('-').pop()}
                     <span className="text-xs font-normal text-slate-400">
-                      {' '}· #{ticket.ticket_number.split('-').pop()}
+                      {' '}· {ticket.title}
                     </span>
                   </span>
                   <span className="text-xs text-slate-400 shrink-0">

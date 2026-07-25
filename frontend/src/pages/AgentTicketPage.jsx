@@ -1,4 +1,3 @@
-import { useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
@@ -8,7 +7,8 @@ import PriorityBadge from '../components/tickets/PriorityBadge'
 import StatusBadge from '../components/tickets/StatusBadge'
 import SlaBar from '../components/tickets/SlaBar'
 import EscalationModal from '../components/agent/EscalationModal'
-import { MOCK_AGENT_TICKETS } from '../data/mockAgentTickets'
+import { useEffect, useMemo, useState } from 'react'
+import { fetchTicket, resolveTicket, changeTicketStatus } from '../api/tickets'
 
 // Écran 2.2 — Fiche de traitement détaillée de l'incident (console agent).
 // ⚠️ Le changement de statut / la résolution / l'escalade ne modifient que
@@ -70,7 +70,8 @@ function buildTimeline(ticket, status) {
 function AgentTicketPage() {
   const { ticketId } = useParams()
   const navigate = useNavigate()
-  const ticket = MOCK_AGENT_TICKETS.find((t) => String(t.id) === ticketId)
+  const [ticket, setTicket] = useState(null)
+  const [loading, setLoading] = useState(true)
 
   const [status, setStatus] = useState(ticket?.current_status ?? 'OPEN')
   const [showEscalation, setShowEscalation] = useState(false)
@@ -79,6 +80,35 @@ function AgentTicketPage() {
     () => (ticket ? buildTimeline(ticket, status) : []),
     [ticket, status]
   )
+
+  useEffect(() => {
+  loadTicket()
+}, [ticketId])
+
+const loadTicket = async () => {
+  try {
+    setLoading(true)
+
+    const data = await fetchTicket(ticketId)
+
+    setTicket(data)
+    setStatus(data.current_status)
+  } catch (error) {
+    toast.error(
+      error.response?.data?.detail ||
+      "Impossible de charger le ticket."
+    )
+  } finally {
+    setLoading(false)
+  }
+}
+if (loading) {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      Chargement...
+    </div>
+  )
+}
 
   if (!ticket) {
     return (
@@ -98,18 +128,28 @@ function AgentTicketPage() {
   const shortNumber = ticket.ticket_number.split('-').pop()
   const isResolved = ['RESOLVED', 'CLOSED'].includes(status)
 
-  const changeStatus = (value) => {
-    setStatus(value)
-    toast.success(
-      `Statut mis à jour : ${STATUS_OPTIONS.find((o) => o.value === value)?.label ?? value} (local, en attente de l'API)`
-    )
+  const changeStatus = async (value) => {
+  if (value === 'ESCALATED') {
+    setShowEscalation(true)
+    return
   }
+  try {
+    const updated = value === 'RESOLVED'
+      ? await resolveTicket(ticket.id)
+      : await changeTicketStatus(ticket.id, value)
+    setTicket(updated)
+    setStatus(updated.current_status)
+    toast.success(`Statut mis à jour : ${STATUS_OPTIONS.find((o) => o.value === value)?.label ?? value}`)
+  } catch (error) {
+    toast.error(error?.response?.data?.detail || "Échec de la mise à jour du statut.")
+  }
+}
 
-  const confirmEscalation = ({ reasonLabel }) => {
-    setShowEscalation(false)
-    setStatus('ESCALATED')
-    toast.success(`Ticket escaladé au superviseur — motif : ${reasonLabel} (simulation)`)
-  }
+  const confirmEscalation = async ({ reasonLabel }) => {
+  setShowEscalation(false)
+  toast.success(`Ticket escaladé au superviseur — motif : ${reasonLabel}`)
+  await loadTicket()
+}
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -143,18 +183,15 @@ function AgentTicketPage() {
             </p>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
               <div>
-                <dt className="text-xs text-slate-400">Client</dt>
+                <dt className="text-xs text-slate-400">Référence</dt>
                 <dd className="font-medium text-slate-700 mt-0.5">
-                  {ticket.client.first_name} {ticket.client.last_name}
+                  {ticket.ticket_number}
                   <span className="block text-xs font-normal text-slate-400">
-                    {ticket.client.company}
+                    Demandeur anonymisé
                   </span>
                 </dd>
               </div>
-              <div>
-                <dt className="text-xs text-slate-400">Catégorie</dt>
-                <dd className="font-medium text-slate-700 mt-0.5">{ticket.category}</dd>
-              </div>
+              
               <div>
                 <dt className="text-xs text-slate-400">Créé le</dt>
                 <dd className="font-medium text-slate-700 mt-0.5">
@@ -187,7 +224,7 @@ function AgentTicketPage() {
             </p>
             <p className="text-sm text-slate-700 leading-relaxed">{ticket.description}</p>
 
-            {ticket.attachments.length > 0 && (
+            {ticket.attachments?.length > 0 && (
               <ul className="mt-3 space-y-1.5">
                 {ticket.attachments.map((file) => (
                   <li

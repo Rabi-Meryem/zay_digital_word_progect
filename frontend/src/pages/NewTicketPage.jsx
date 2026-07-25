@@ -6,19 +6,17 @@ import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { ArrowLeft, Paperclip, X, Send, Sparkles } from 'lucide-react'
 import { BLOCS } from '../data/modules'
-import { addMockTicket } from '../data/mockTickets'
+import { createTicket } from '../api/tickets'
 
 // Écran de création d'un ticket (/tickets/nouveau).
 //
 // La criticité n'est pas demandée au client : elle est déterminée par le module
 // IA à partir de la description et du module concerné (voir les champs
-// priority / ai_priority / ai_confidence du modèle Ticket). Le formulaire est
-// donc conçu pour obtenir une description exploitable par le classifieur.
+// priority / ai_priority / ai_confidence du modèle Ticket).
 //
-// ⚠️ La création est locale (voir addMockTicket dans mockTickets.js).
-// TODO API : POST /api/tickets/ avec { title, description, module_concerne, source: 'WEB' }
-// → le backend renvoie le ticket créé avec ticket_number, priority, ai_priority,
-//   ai_confidence et sla_deadline.
+// Branché sur l'API réelle : POST /api/tickets/ via createTicket()
+// (voir src/api/tickets.js) → le backend renvoie le ticket créé avec
+// ticket_number, priority, ai_priority, ai_confidence et sla_deadline.
 
 const MAX_FICHIERS = 3
 const TAILLE_MAX_MO = 5
@@ -76,15 +74,33 @@ function NewTicketPage() {
 
   const onSubmit = async (values) => {
     setEnvoi(true)
+    try {
+      const ticket = await createTicket({
+        title: values.title,
+        description: values.description,
+        module_concerne: values.module_concerne,
+        files: fichiers,
+      })
 
-    // TODO API : remplacer par un POST multipart vers /api/tickets/
-    // (les pièces jointes alimentent le modèle TicketAttachment).
-    await new Promise((resolve) => setTimeout(resolve, 500))
+      if (ticket.attachments_rejected?.length) {
+        ticket.attachments_rejected.forEach((r) =>
+          toast.error(`${r.file} : ${r.reason}`)
+        )
+      }
 
-    const ticket = addMockTicket(values)
-    setEnvoi(false)
-    toast.success(`Ticket ${ticket.ticket_number} créé.`)
-    navigate(`/tickets/${ticket.id}`)
+      toast.success(`Ticket ${ticket.ticket_number} créé.`)
+      navigate(`/tickets/${ticket.id}`)
+    } catch (error) {
+      toast.error(
+        error.response?.data?.detail ||
+        error.response?.data?.title?.[0] ||
+        error.response?.data?.module_concerne?.[0] ||
+        error.response?.data?.description?.[0] ||
+        "Impossible de créer le ticket."
+      )
+    } finally {
+      setEnvoi(false)
+    }
   }
 
   return (

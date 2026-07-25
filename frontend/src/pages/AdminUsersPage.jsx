@@ -4,6 +4,7 @@ import { Search, UserPlus, Shield, KeyRound, Ban, RotateCcw, X } from 'lucide-re
 import {
   listUsers, createUser, updateUser, deactivateUser, activateUser, resetUserPassword,
 } from '../api/adminUsersService'
+import { rolesApi } from "../api/adminApi";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Console de gestion des comptes — ADMIN (maquette Écran 3.2).
@@ -13,13 +14,10 @@ import {
 // Routes réelles : UserListCreateView, UserDetailView, activate, reset-password.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const ROLE_OPTIONS = [
-  { id: 1, name: 'CLIENT', label: 'Client' },
-  { id: 2, name: 'AGENT', label: 'Agent' },
-  { id: 3, name: 'SUPERVISOR', label: 'Superviseur' },
-  { id: 4, name: 'ADMIN', label: 'Administrateur' },
-]
-const roleLabel = (n) => ROLE_OPTIONS.find((r) => r.name === n)?.label ?? n
+
+
+ 
+
 
 // Jeu de démonstration si le backend n'est pas joignable (navigable sans serveur).
 const DEMO = [
@@ -35,8 +33,11 @@ function AdminUsersPage() {
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [roleModal, setRoleModal] = useState(null)   // user en cours d'édition de rôle
-  const [pwdModal, setPwdModal] = useState(null)     // user en cours de reset mdp
-
+  const [pwdModal, setPwdModal] = useState(null) 
+  const [roleOptions, setRoleOptions] = useState([])    // user en cours de reset mdp
+  useEffect(() => {
+  rolesApi.list().then(res => setRoleOptions(res.data))
+}, [])
   const load = useCallback(() => {
     listUsers({ role: roleFilter || undefined, search: search || undefined })
       .then((data) => setUsers(Array.isArray(data) ? data : data.results ?? []))
@@ -58,6 +59,8 @@ function AdminUsersPage() {
     catch { toast.success(`${u.first_name} réactivé (simulation).`) }
     load()
   }
+const roleLabel = (name) =>
+  roleOptions.find((r) => r.name === name)?.label ?? name 
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 sm:p-6">
@@ -82,7 +85,7 @@ function AdminUsersPage() {
         <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}
           className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
           <option value="">Tous les rôles</option>
-          {ROLE_OPTIONS.map((r) => <option key={r.name} value={r.name}>{r.label}</option>)}
+          {roleOptions.map((r) => <option key={r.name} value={r.name}>{r.label}</option>)}
         </select>
       </div>
 
@@ -134,8 +137,8 @@ function AdminUsersPage() {
         </table>
       </div>
 
-      {showCreate && <CreateModal onClose={() => setShowCreate(false)} onDone={load} />}
-      {roleModal && <RoleModal user={roleModal} onClose={() => setRoleModal(null)} onDone={load} />}
+      {showCreate && <CreateModal  roleOptions={roleOptions} onClose={() => setShowCreate(false)} onDone={load} />}
+      {roleModal && <RoleModal user={roleModal} roleOptions={roleOptions} onClose={() => setRoleModal(null)} onDone={load} />}
       {pwdModal && <PwdModal user={pwdModal} onClose={() => setPwdModal(null)} />}
     </div>
   )
@@ -155,7 +158,7 @@ function Overlay({ children, onClose, title }) {
   )
 }
 
-function CreateModal({ onClose, onDone }) {
+function CreateModal({ onClose, onDone ,roleOptions }) {
   const [f, setF] = useState({ first_name: '', last_name: '', email: '', phone: '', role_id: 1, password: '' })
   const submit = async () => {
     if (!f.first_name || !f.last_name || !f.email || !f.password) { toast.error('Champs obligatoires manquants.'); return }
@@ -173,7 +176,7 @@ function CreateModal({ onClose, onDone }) {
         <input placeholder="Email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
         <input placeholder="Téléphone" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
         <select value={f.role_id} onChange={(e) => setF({ ...f, role_id: Number(e.target.value) })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-          {ROLE_OPTIONS.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+          {roleOptions.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
         </select>
         <input type="password" placeholder="Mot de passe initial" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
         <button type="button" onClick={submit} className="w-full bg-primary text-white rounded-lg py-2 text-sm font-medium hover:bg-primary/90">Créer le compte</button>
@@ -182,8 +185,8 @@ function CreateModal({ onClose, onDone }) {
   )
 }
 
-function RoleModal({ user, onClose, onDone }) {
-  const [roleId, setRoleId] = useState(ROLE_OPTIONS.find((r) => r.name === user.role?.name)?.id ?? 2)
+function RoleModal({ user, onClose, onDone , roleOptions}) {
+  const [roleId, setRoleId] = useState(roleOptions.find((r) => r.name === user.role?.name)?.id ?? 2)
   const submit = async () => {
     try { await updateUser(user.id, { role_id: roleId }); toast.success('Rôle modifié.') }
     catch { toast.success('Rôle modifié (simulation).') }
@@ -192,7 +195,7 @@ function RoleModal({ user, onClose, onDone }) {
   return (
     <Overlay title={`Rôle — ${user.first_name} ${user.last_name}`} onClose={onClose}>
       <select value={roleId} onChange={(e) => setRoleId(Number(e.target.value))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white mb-3">
-        {ROLE_OPTIONS.filter((r) => r.name === 'AGENT' || r.name === 'SUPERVISOR').map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+        {roleOptions.filter((r) => r.name === 'AGENT' || r.name === 'SUPERVISOR').map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
       </select>
       <button type="button" onClick={submit} className="w-full bg-primary text-white rounded-lg py-2 text-sm font-medium hover:bg-primary/90">Enregistrer</button>
     </Overlay>

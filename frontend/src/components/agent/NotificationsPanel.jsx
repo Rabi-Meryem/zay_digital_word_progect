@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect , useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, MessageSquare, Ticket, AlertTriangle, Check } from 'lucide-react'
+import { fetchNotifications, markNotificationRead } from '../../api/notifications'
 
 // Notifications de démonstration — les types reprennent ceux insérés par
 // seed_data (NotificationType) : NEW_MESSAGE, SLA_WARNING, TICKET_ASSIGNED…
