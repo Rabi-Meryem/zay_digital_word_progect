@@ -3,9 +3,9 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from users.views import (
     LoginView, LogoutView, MeView,
     UserListCreateView, UserDetailView,
-    UserActivateView, PasswordResetView
+    UserActivateView, PasswordResetView, RoleListView,
 )
- 
+from users.views_agents import AgentListView, AgentAvailabilityUpdateView
 urlpatterns = [
  
     # ── Authentification ────────────────────────────────────────────────────
@@ -13,6 +13,7 @@ urlpatterns = [
     path('auth/logout/',  LogoutView.as_view(),        name='logout'),
     path('auth/refresh/', TokenRefreshView.as_view(),  name='token-refresh'),
     path('auth/me/',      MeView.as_view(),            name='me'),
+    path('roles/', RoleListView.as_view(), name='role-list'),
  
     # ── Gestion des utilisateurs (admin) ───────────────────────────────────
     # GET  /api/users/?role=AGENT&search=ahmed&is_active=true
@@ -37,5 +38,7 @@ urlpatterns = [
     path('users/<int:pk>/reset-password/',
          PasswordResetView.as_view(),
          name='password-reset'),
+     path('agents/', AgentListView.as_view(), name='agent-list'),
+     path('agents/<int:agent_id>/availability/', AgentAvailabilityUpdateView.as_view(), name='agent-availability-update'),
 ]
  

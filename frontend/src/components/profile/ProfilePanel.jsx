@@ -1,15 +1,21 @@
 import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { User, Mail, Phone, Shield, Save } from 'lucide-react'
-import { fetchMyProfile, updateMyProfile } from '../../api/profileService'
+import {
+  fetchMyProfile,
+  updateMyProfile,
+  sendAdminRequest,
+} from '../../api/profileService'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Panneau « Mon profil » — partagé par les rôles (client, agent, superviseur).
+// Panneau « Mon profil » — partagé par les rôles client, agent, superviseur.
 // L'utilisateur voit ses infos et modifie SEULEMENT : prénom, nom, téléphone.
-//   • Le RÔLE n'est jamais modifiable par l'utilisateur (lecture seule).
-//   • Le MOT DE PASSE ne se change plus depuis ce panneau : ça se passe sur
-//     l'écran de connexion, via « Mot de passe oublié » (voir ForgotPasswordModal),
-//     qui envoie la demande à l'administrateur.
+//   • Le RÔLE est en lecture seule → géré par l'admin.
+//     - Client : le rôle n'est PAS modifiable (un client reste un client) →
+//       aucune demande de changement de rôle.
+//     - Agent / Superviseur : peuvent demander un changement de rôle à l'admin.
+//   • Le MOT DE PASSE n'est plus géré ici : la réinitialisation se fait via
+//     l'écran « Mot de passe oublié » (utilisateur non connecté).
 // Aligné sur le vrai UserSerializer : { first_name, last_name, email, phone,
 // role:{name}, ... } et PATCH /api/auth/me/ (ProfileUpdateSerializer).
 // Layout desktop : deux cartes côte à côte sur grand écran, pleine largeur.
@@ -26,6 +32,8 @@ function ProfilePanel() {
   const [profile, setProfile] = useState(null)
   const [form, setForm] = useState({ first_name: '', last_name: '', phone: '' })
   const [saving, setSaving] = useState(false)
+  const [roleRequestOpen, setRoleRequestOpen] = useState(false)
+  const [requestMsg, setRequestMsg] = useState('')
 
   // Chargement du profil réel ; repli silencieux sur un profil de démo si la
   // route échoue (backend indisponible), pour rester navigable sans serveur.
@@ -52,6 +60,7 @@ function ProfilePanel() {
 
   const roleName = profile?.role?.name ?? 'CLIENT'
   const roleLabel = ROLE_LABELS[roleName] ?? roleName
+  const canRequestRole = roleName !== 'CLIENT' // un client ne change pas de rôle
 
   const dirty =
     profile &&
@@ -76,6 +85,17 @@ function ProfilePanel() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const submitRoleRequest = async () => {
+    if (!requestMsg.trim()) {
+      toast.error('Merci de préciser votre demande.')
+      return
+    }
+    await sendAdminRequest({ type: 'ROLE', message: requestMsg })
+    toast.success('Demande de changement de rôle envoyée à l’administrateur.')
+    setRoleRequestOpen(false)
+    setRequestMsg('')
   }
 
   if (!profile) {
@@ -130,24 +150,56 @@ function ProfilePanel() {
         </button>
       </div>
 
-      {/* Carte 2 — Rôle (lecture seule uniquement, plus de demande de rôle ni
-          de mot de passe ici : le mot de passe se réinitialise depuis l'écran
-          de connexion via « Mot de passe oublié ») */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6">
-        <h2 className="text-base font-semibold text-slate-800 mb-1">
-          Rôle et sécurité
-        </h2>
+      {/* Carte 2 — Rôle (lecture seule ; demande de changement sauf pour le client) */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5">
+        <h2 className="text-base font-semibold text-slate-800 mb-1">Rôle</h2>
         <p className="text-xs text-slate-400 mb-4">
-          Le rôle est géré par l'administrateur et ne peut pas être modifié
-          depuis cet espace. Pour réinitialiser votre mot de passe, utilisez
-          le lien « Mot de passe oublié » sur l'écran de connexion : la
-          demande sera traitée par l'administrateur.
+          {canRequestRole
+            ? 'Votre rôle est géré par l’administrateur. Pour en changer, envoyez une demande.'
+            : 'Votre rôle est géré par l’administrateur et n’est pas modifiable.'}
         </p>
 
-        <div className="flex items-center gap-2 text-sm text-slate-700">
+        <div className="flex items-center gap-2 text-sm text-slate-700 mb-4">
           <Shield size={15} className="text-slate-400" />
           Rôle actuel : <span className="font-medium">{roleLabel}</span>
         </div>
+
+        {canRequestRole && (
+          <button
+            type="button" onClick={() => { setRoleRequestOpen(true); setRequestMsg('') }}
+            className="text-xs font-medium border border-slate-200 rounded-lg px-3 py-2 hover:bg-slate-50"
+          >
+            Demander un changement de rôle
+          </button>
+        )}
+
+        {canRequestRole && roleRequestOpen && (
+          <div className="mt-4 border-t border-slate-100 pt-4">
+            <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+              Précisez le rôle souhaité et la raison
+            </label>
+            <textarea
+              rows={3} value={requestMsg}
+              onChange={(e) => setRequestMsg(e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+              placeholder="Votre message à l’administrateur…"
+            />
+            <div className="flex gap-2 mt-2">
+              <button
+                type="button" onClick={submitRoleRequest}
+                className="bg-primary text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-primary/90"
+              >
+                Envoyer la demande
+              </button>
+              <button
+                type="button" onClick={() => setRoleRequestOpen(false)}
+                className="text-slate-500 rounded-lg px-3 py-2 text-sm hover:bg-slate-50"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

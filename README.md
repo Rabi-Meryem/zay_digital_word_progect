@@ -760,3 +760,161 @@ Les indicateurs disponibles sont notamment :
 
 ---
 
+
+1. Module SLA — Configuration des règles de service (Admin/Superviseur)
+
+Objectif métier (CDC, Module 8.2 / 6.1) : permettre à l'administrateur (et au superviseur, selon la matrice CRUD du CDC) de configurer les délais de résolution maximaux et les seuils d'alerte pour chaque niveau de priorité (Critique, Haute, Moyenne, Basse), sans intervention technique.
+
+Technologies : Django REST Framework (ViewSet + Router), React.js, Tailwind CSS.
+
+Fichiers ajoutés (backend, app sla/) :
+
+
+sla/serializers.py — sérialisation du modèle SLARule existant (délai, seuil d'alerte, priorité, actif).
+sla/views.py — SLARuleViewSet (CRUD complet), avec gestion propre de la suppression protégée (un ticket ne peut pas perdre sa règle SLA).
+sla/urls.py — expose /api/sla-rules/.
+
+
+Fichiers modifiés :
+
+
+config/urls.py — ajout de include('sla.urls').
+
+
+Fichiers ajoutés (frontend) :
+
+
+frontend/src/api/sla.js — appels API (liste, mise à jour).
+frontend/src/pages/admin/sla-config/SlaConfigPage.jsx — interface d'édition des 4 règles SLA (délai, seuil d'alerte, statut actif), avec validation et retour visuel (toasts).
+
+
+Justification : centraliser les délais SLA en base de données plutôt qu'en dur dans le code permet à l'administrateur de faire évoluer les engagements de service (Plan Essentiel/Standard/Premium) sans redéploiement, conformément au cahier des charges fonctionnel.
+
+
+2. Module Escalades — Traitement par le superviseur
+
+Objectif métier (CDC, Modules 6.4 / 5.5) : permettre au superviseur de recevoir, qualifier et traiter les escalades manuelles (agent → superviseur) ou automatiques (dépassement SLA).
+
+Technologies : Django REST Framework (APIView), React.js.
+
+Fichiers ajoutés (backend, app escalation/) :
+
+
+escalation/serializers.py — sérialisation enrichie (infos client, ticket, agent à l'origine, deadline SLA).
+escalation/views.py — 4 vues : liste des escalades (filtrable par statut), prise en charge, réaffectation à un autre agent, renvoi à l'agent d'origine.
+escalation/urls.py — expose /api/escalations/.
+
+
+Fichiers modifiés :
+
+
+config/urls.py — ajout de include('escalation.urls').
+tickets/services.py (ticket_service.escalate_ticket) — réutilisé tel quel pour la création d'escalade (aucune duplication de logique métier).
+
+
+Justification : cette app existait déjà au niveau du modèle (Escalation) mais sans couche API — elle a été complétée pour rendre les données consultables et actionnables depuis le dashboard superviseur.
+
+
+3. Dashboard Superviseur — Vue d'ensemble, Supervision SLA, Performance équipe
+
+Objectif métier (CDC, Module 7 — Dashboard et Reporting) : donner au superviseur une vision globale et temps réel de l'activité du support (KPIs, volumes, répartition des statuts, conformité SLA, performance par agent).
+
+Technologies : Django REST Framework (agrégations via l'ORM Django : Count, Avg), React.js, Recharts (graphiques), Tailwind CSS.
+
+Fichiers ajoutés (backend, app tickets/) :
+
+
+tickets/views_dashboard.py — 6 vues dédiées au superviseur :
+
+SupervisorKpisView : indicateurs globaux (total, ouverts, en cours, résolus, critiques actifs, SLA non respecté, conformité SLA, satisfaction moyenne).
+SupervisorVolumeView : volume de tickets créés/résolus sur 7 jours glissants.
+SupervisorStatusDistributionView : répartition des tickets par statut.
+SupervisorAiClassificationView : répartition des tickets par criticité prédite par l'IA (prêt pour le module IA à venir).
+SupervisorSlaTicketsView : liste des tickets actifs triés par urgence SLA, avec filtres (dépassé / à risque).
+SupervisorAgentsPerformanceView : statistiques par agent (tickets traités, temps moyen de résolution, taux de respect SLA, satisfaction, charge active).
+
+
+
+
+
+Fichiers ajoutés (backend, app users/) :
+
+
+users/views_agents.py — AgentListView (liste des agents avec disponibilité/charge) et AgentAvailabilityUpdateView (mise à jour du statut de disponibilité).
+users/serializers.py — ajout de AgentAvailabilitySerializer.
+
+
+Fichiers modifiés :
+
+
+tickets/urls.py — ajout des 6 routes supervisor/....
+users/urls.py — ajout des routes agents/....
+
+
+Fichiers ajoutés (frontend) :
+
+
+frontend/src/api/supervisor.js — centralise tous les appels API du dashboard superviseur.
+frontend/src/utils/agentDisplay.js — génération déterministe de couleur/initiales par agent (évite de stocker ces informations en base).
+frontend/src/pages/supervisor/SupervisorDashboardPage.jsx — branchement complet du dashboard (précédemment sur données de démonstration) sur les API réelles : Vue d'ensemble, Escalades, Supervision SLA, Performance équipe, Rapports, modale de réaffectation.
+
+
+Justification : les indicateurs sont calculés à la volée depuis la table Ticket plutôt que stockés (sauf la charge agent, tenue à jour par ticket_service._update_agent_workload), ce qui garantit des chiffres toujours exacts sans job de synchronisation supplémentaire à maintenir à ce stade du projet.
+
+
+4. Module Rapports — Export PDF / Excel / CSV
+
+Objectif métier (CDC, Module 7.9 — Reporting et export) : permettre au superviseur de générer un rapport de performance filtré (période, agent, priorité, statut) et de le télécharger.
+
+Technologies : ReportLab (génération PDF), openpyxl (génération Excel), module csv natif Python (export CSV), Django (FileField + stockage).
+
+Fichiers ajoutés (backend, app reports/) :
+
+
+reports/services.py — get_report_data(), fonction unique de collecte des données (KPIs, performance par agent, tickets escaladés) réutilisée par les 3 formats d'export.
+reports/serializers.py — sérialisation de l'historique des rapports générés.
+reports/views.py — GenerateReportView (génère et déclenche le téléchargement ; PDF et Excel sont aussi persistés dans la table Report conformément au modèle existant) et ReportListView (historique des rapports).
+reports/urls.py — expose /api/reports/generate/ et /api/reports/.
+
+
+Fichiers modifiés :
+
+
+config/urls.py — ajout de include('reports.urls').
+
+
+Fichiers ajoutés (frontend) :
+
+
+frontend/src/api/reports.js — déclenche le téléchargement du fichier depuis le navigateur.
+Section « Rapports » du SupervisorDashboardPage.jsx — filtres (agent, priorité, statut) et sélection du format d'export.
+
+
+Justification : la génération est faite à la demande (pas de tâche planifiée) car c'est une action explicite du superviseur ; les rapports PDF/Excel sont conservés en base (Report) pour permettre un historique consultable, conformément aux deux modèles déjà définis dans le projet (Report, AgentStatistics).
+
+
+5. Module Notifications — Alertes in-app et email
+
+Objectif métier (CDC, Module 5 — Notifications) : informer automatiquement chaque utilisateur des événements qui le concernent (création de ticket, affectation, changement de statut, résolution, réouverture, escalade, alerte SLA, surcharge agent, alerte sécurité), via notification in-app et email.
+
+Technologies : Django (templates HTML pour les emails, déjà existants), service de notification centralisé.
+
+Fichiers ajoutés (backend, app notifications/) :
+
+
+notifications/serializers.py — sérialisation des notifications (type, titre, contenu, lu/non lu, ticket associé).
+notifications/views.py — NotificationListView (liste paginée, filtrable par lu/non lu), NotificationMarkReadView, NotificationMarkAllReadView, NotificationUnreadCountView (pour le badge de la cloche).
+notifications/urls.py — expose /api/notifications/....
+sla/management/commands/check_sla.py — commande de vérification périodique des seuils SLA (80 % → alerte préventive de l'agent ; 100 % → alerte critique + escalade automatique), prérequis pour que les notifications SLA_WARNING/SLA_EXCEEDED se déclenchent réellement.
+
+
+Fichiers modifiés :
+
+
+config/urls.py — ajout de include('notifications.urls').
+notifications/services.py — extension de NotificationService.notify() avec des paramètres optionnels (override_title, override_content) pour permettre des messages différenciés selon le destinataire (ex. agent vs client sur un même événement d'affectation) et la prise en charge d'alertes sans ticket associé (surcharge agent, alerte sécurité) ; rétrocompatible avec tous les appels existants.
+tickets/services.py (TicketService) — ajout des appels à notification_service.notify(...) aux points clés du cycle de vie d'un ticket : création (client + superviseurs), affectation (agent + client), changement de statut (résolu, clôturé, réouvert, autres), escalade (superviseur), surcharge agent (superviseurs).
+users/views.py — ajout d'un envoi de notification réelle aux administrateurs lors de la détection d'anomalies de connexion (au lieu du seul enregistrement en AuditLog) : force brute par IP, tentatives répétées sur un compte, connexion à horaire inhabituel.
+
+
+Justification : le service de notification existait déjà mais n'était appelé nulle part dans le code métier — ce lot connecte effectivement chaque événement du cycle de vie d'un ticket (et de la sécurité des comptes) à l'envoi réel d'une notification, conformément aux modules 5.2 à 5.6 du cahier des charges fonctionnel.

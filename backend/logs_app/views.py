@@ -6,8 +6,8 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
  
 from logs_app.models import AuditLog
-from logs_app.serializers import AuditLogSerializer
-from logs_app.filters import AuditLogFilter
+from logs_app.logs_serializers import AuditLogSerializer
+from logs_app.logs_filters import AuditLogFilter
 from users.models import LoginHistory
 from users.permissions import IsAdminRole
  

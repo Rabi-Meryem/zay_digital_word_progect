@@ -1,10 +1,11 @@
-import { useMemo } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
-import { Ticket, MessageSquare, LogOut } from 'lucide-react'
+import { Ticket, MessageSquare, LogOut, User, LineChart } from 'lucide-react'
 import AgentTicketCard from '../components/agent/AgentTicketCard'
 import NotificationsPanel from '../components/agent/NotificationsPanel'
-import { MOCK_AGENT_TICKETS } from '../data/mockAgentTickets'
+import { useEffect, useMemo, useState } from 'react'
+import toast from 'react-hot-toast'
+import { fetchTickets } from '../api/tickets'
 import { logout } from '../store/authSlice'
 
 // Console Agent — Écran 2.1 : « Dashboard des Assignations & Files d'Attente
@@ -35,14 +36,43 @@ function AgentDashboardPage() {
   const user = useSelector((state) => state.auth.user)
   const dispatch = useDispatch()
   const navigate = useNavigate()
+  const [tickets, setTickets] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+  loadTickets()
+}, [])
+
+const loadTickets = async () => 
+  {
+  try {
+    setLoading(true)
+
+    const data = await fetchTickets()
+
+    setTickets(data.results ?? data)
+  } catch (error) {
+    toast.error(
+      error.response?.data?.detail ||
+      "Impossible de charger les tickets."
+    )
+  } finally {
+    setLoading(false)
+  }
+}
+
+
 
   // En mode VITE_SKIP_AUTH (aucune connexion), on affiche l'agent de la maquette.
   const agentName = user ? `${user.first_name} ${user.last_name ?? ''}`.trim() : 'Ahmed Karimi'
 
   const activeTickets = useMemo(
-    () => MOCK_AGENT_TICKETS.filter((t) => !RESOLVED_STATUSES.includes(t.current_status)),
-    []
-  )
+  () =>
+    tickets.filter(
+      (t) => !RESOLVED_STATUSES.includes(t.current_status)
+    ),
+  [tickets]
+)
 
   // Compteurs CALCULÉS depuis les données (jamais codés en dur).
   const countsByPriority = useMemo(() => {
@@ -71,7 +101,13 @@ function AgentDashboardPage() {
         ),
     [activeTickets]
   )
-
+if (loading) {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      Chargement...
+    </div>
+  )
+}
   return (
     <div className="min-h-screen bg-slate-50 md:flex">
       {/* ── Barre latérale (masquée sur mobile) ─────────────────────────── */}
@@ -106,6 +142,22 @@ function AgentDashboardPage() {
                 {unreadTotal}
               </span>
             )}
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/agent/stats')}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50"
+          >
+            <LineChart size={16} />
+            Mon évolution
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/agent/profil')}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-50"
+          >
+            <User size={16} />
+            Mon profil
           </button>
         </nav>
 

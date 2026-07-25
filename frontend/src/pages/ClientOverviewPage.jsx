@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus } from 'lucide-react'
+import toast from 'react-hot-toast'
 import ClientHeader from '../components/layout/ClientHeader'
 import KpiRow from '../components/dashboard/KpiRow'
 import VolumeChart from '../components/dashboard/VolumeChart'
@@ -8,26 +10,40 @@ import PriorityTicketsWidget from '../components/dashboard/PriorityTicketsWidget
 import RecentActivityWidget from '../components/dashboard/RecentActivityWidget'
 import ReportExport from '../components/dashboard/ReportExport'
 import NotificationCenter from '../components/dashboard/NotificationCenter'
-import { MOCK_TICKETS } from '../data/mockTickets'
-
-// Tableau de bord client 360° — nouvelle page d'accueil de l'espace client (/dashboard).
-//
-// Structure retenue :
-//   Ligne 1 : les 6 KPI essentiels
-//   Ligne 2 : évolution des tickets       | qualité du support (satisfaction)
-//   Ligne 3 : mes tickets prioritaires    | activités récentes
-//   Ligne 4 : export de rapports          | centre de notifications
-//
-// ⚠️ S'appuie sur MOCK_TICKETS (voir mockTickets.js) — à remplacer par
-// GET /api/tickets/?client=me dès que la route existera.
+import { fetchTickets } from '../api/tickets'   // ← plus de mockTickets ici
 
 function ClientOverviewPage() {
-  const tickets = MOCK_TICKETS
+  const [tickets, setTickets] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true)
+        const data = await fetchTickets({ page_size: 100 })
+        setTickets(data.results ?? [])
+      } catch (error) {
+        toast.error(
+          error.response?.data?.detail || "Impossible de charger le tableau de bord."
+        )
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        Chargement...
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
       <ClientHeader />
-
       <main className="max-w-6xl mx-auto px-4 py-5 space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
@@ -45,22 +61,18 @@ function ClientOverviewPage() {
           </Link>
         </div>
 
-        {/* Ligne 1 — KPI */}
         <KpiRow tickets={tickets} />
 
-        {/* Ligne 2 — évolution + satisfaction */}
         <div className="grid lg:grid-cols-2 gap-4">
           <VolumeChart tickets={tickets} />
           <SatisfactionGauge tickets={tickets} />
         </div>
 
-        {/* Ligne 3 — prioritaires + activités */}
         <div className="grid lg:grid-cols-2 gap-4">
           <PriorityTicketsWidget tickets={tickets} />
           <RecentActivityWidget />
         </div>
 
-        {/* Ligne 4 — rapports + notifications */}
         <div className="grid lg:grid-cols-2 gap-4 pb-6">
           <ReportExport />
           <NotificationCenter />
