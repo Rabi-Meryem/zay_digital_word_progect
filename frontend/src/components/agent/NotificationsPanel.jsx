@@ -1,46 +1,14 @@
-import { useEffect , useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, MessageSquare, Ticket, AlertTriangle, Check } from 'lucide-react'
-import { fetchNotifications, markNotificationRead } from '../../api/notifications'
+import {
+  fetchNotifications,
+  markNotificationRead,
+  markAllRead as apiMarkAllRead,
+} from '../../api/notifications'
 
-// Notifications de démonstration — les types reprennent ceux insérés par
-// seed_data (NotificationType) : NEW_MESSAGE, SLA_WARNING, TICKET_ASSIGNED…
-// À remplacer par GET /api/notifications/ (+ WebSocket) quand la route existera.
-
-const INITIAL_NOTIFICATIONS = [
-  {
-    id: 1,
-    type: 'NEW_MESSAGE',
-    text: 'Nouveau message de Meryem Rabi — ticket #00046',
-    minutesAgo: 3,
-    read: false,
-    ticketId: 146,
-  },
-  {
-    id: 2,
-    type: 'SLA_WARNING',
-    text: 'SLA à 80 % — ticket #00045 (1h 10min restantes)',
-    minutesAgo: 12,
-    read: false,
-    ticketId: 145,
-  },
-  {
-    id: 3,
-    type: 'TICKET_ASSIGNED',
-    text: 'Le ticket #00048 vous a été assigné',
-    minutesAgo: 140,
-    read: false,
-    ticketId: 148,
-  },
-  {
-    id: 4,
-    type: 'TICKET_ASSIGNED',
-    text: 'Le ticket #00043 vous a été assigné',
-    minutesAgo: 360,
-    read: true,
-    ticketId: 143,
-  },
-]
+// Notifications réelles — GET /api/notifications/
+// Types insérés par seed_data : NEW_MESSAGE, SLA_WARNING, TICKET_ASSIGNED…
 
 const TYPE_ICONS = {
   NEW_MESSAGE: MessageSquare,
@@ -48,7 +16,9 @@ const TYPE_ICONS = {
   TICKET_ASSIGNED: Ticket,
 }
 
-function formatAgo(minutes) {
+function formatAgo(iso) {
+  if (!iso) return ''
+  const minutes = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000))
   if (minutes < 60) return `il y a ${minutes} min`
   const h = Math.floor(minutes / 60)
   if (h < 24) return `il y a ${h} h`
@@ -57,21 +27,46 @@ function formatAgo(minutes) {
 
 function NotificationsPanel() {
   const [open, setOpen] = useState(false)
-  const [items, setItems] = useState(INITIAL_NOTIFICATIONS)
+  const [items, setItems] = useState([])
   const navigate = useNavigate()
 
-  const unreadCount = items.filter((n) => !n.read).length
+  useEffect(() => {
+    fetchNotifications()
+      .then((data) => setItems(data.results ?? data ?? []))
+      .catch(() => setItems([]))
+  }, [])
 
-  const openTicket = (notification) => {
+  const isRead = (n) => n.is_read ?? n.read ?? false
+  const getText = (n) => n.message ?? n.text ?? n.title ?? ''
+  const getDate = (n) => n.created_at ?? n.createdAt ?? null
+  const getTicketId = (n) => n.ticket ?? n.ticket_id ?? n.ticketId ?? null
+
+  const unreadCount = items.filter((n) => !isRead(n)).length
+
+  const openTicket = async (notification) => {
     setItems((prev) =>
-      prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
+      prev.map((n) => (n.id === notification.id ? { ...n, is_read: true, read: true } : n))
     )
     setOpen(false)
-    navigate(`/agent/tickets/${notification.ticketId}`)
+
+    try {
+      await markNotificationRead(notification.id)
+    } catch {
+      // silencieux : l'affichage local est déjà à jour
+    }
+
+    const ticketId = getTicketId(notification)
+    if (ticketId) navigate(`/agent/tickets/${ticketId}`)
   }
 
-  const markAllRead = () =>
-    setItems((prev) => prev.map((n) => ({ ...n, read: true })))
+  const handleMarkAllRead = async () => {
+    setItems((prev) => prev.map((n) => ({ ...n, is_read: true, read: true })))
+    try {
+      await apiMarkAllRead()
+    } catch {
+      // silencieux
+    }
+  }
 
   return (
     <div className="relative">
@@ -90,7 +85,6 @@ function NotificationsPanel() {
 
       {open && (
         <>
-          {/* Clic à l'extérieur → fermeture */}
           <button
             type="button"
             aria-label="Fermer les notifications"
@@ -103,7 +97,7 @@ function NotificationsPanel() {
               {unreadCount > 0 && (
                 <button
                   type="button"
-                  onClick={markAllRead}
+                  onClick={handleMarkAllRead}
                   className="flex items-center gap-1 text-xs text-secondary hover:underline"
                 >
                   <Check size={13} />
@@ -112,41 +106,48 @@ function NotificationsPanel() {
               )}
             </div>
 
-            <ul className="max-h-80 overflow-y-auto divide-y divide-slate-50">
-              {items.map((n) => {
-                const Icon = TYPE_ICONS[n.type] ?? Bell
-                return (
-                  <li key={n.id}>
-                    <button
-                      type="button"
-                      onClick={() => openTicket(n)}
-                      className={`w-full flex items-start gap-2.5 px-4 py-3 text-left hover:bg-slate-50 ${
-                        n.read ? 'opacity-60' : ''
-                      }`}
-                    >
-                      <span
-                        className={`mt-0.5 shrink-0 ${
-                          n.type === 'SLA_WARNING' ? 'text-accent' : 'text-secondary'
+            {items.length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-8">
+                Aucune notification pour le moment.
+              </p>
+            ) : (
+              <ul className="max-h-80 overflow-y-auto divide-y divide-slate-50">
+                {items.map((n) => {
+                  const Icon = TYPE_ICONS[n.type] ?? Bell
+                  const lu = isRead(n)
+                  return (
+                    <li key={n.id}>
+                      <button
+                        type="button"
+                        onClick={() => openTicket(n)}
+                        className={`w-full flex items-start gap-2.5 px-4 py-3 text-left hover:bg-slate-50 ${
+                          lu ? 'opacity-60' : ''
                         }`}
                       >
-                        <Icon size={15} />
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block text-sm text-slate-700 leading-snug">
-                          {n.text}
+                        <span
+                          className={`mt-0.5 shrink-0 ${
+                            n.type === 'SLA_WARNING' ? 'text-accent' : 'text-secondary'
+                          }`}
+                        >
+                          <Icon size={15} />
                         </span>
-                        <span className="block text-xs text-slate-400 mt-0.5">
-                          {formatAgo(n.minutesAgo)}
+                        <span className="min-w-0">
+                          <span className="block text-sm text-slate-700 leading-snug">
+                            {getText(n)}
+                          </span>
+                          <span className="block text-xs text-slate-400 mt-0.5">
+                            {formatAgo(getDate(n))}
+                          </span>
                         </span>
-                      </span>
-                      {!n.read && (
-                        <span className="ml-auto mt-1.5 h-2 w-2 rounded-full bg-secondary shrink-0" />
-                      )}
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
+                        {!lu && (
+                          <span className="ml-auto mt-1.5 h-2 w-2 rounded-full bg-secondary shrink-0" />
+                        )}
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
           </div>
         </>
       )}

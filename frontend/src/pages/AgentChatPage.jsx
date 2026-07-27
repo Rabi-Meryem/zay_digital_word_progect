@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Send } from 'lucide-react'
+import toast from 'react-hot-toast'
 import PriorityBadge from '../components/tickets/PriorityBadge'
-import { MOCK_AGENT_TICKETS } from '../data/mockAgentTickets'
+import { fetchTicket } from '../api/tickets'
 
 // Écran 2.3 — Fil de discussion côté support (chat technique).
 // ⚠️ L'envoi n'ajoute le message qu'en mémoire locale : l'API messages_app
@@ -15,16 +16,43 @@ function fmtTime(iso) {
 function AgentChatPage() {
   const { ticketId } = useParams()
   const navigate = useNavigate()
-  const ticket = MOCK_AGENT_TICKETS.find((t) => String(t.id) === ticketId)
 
-  const [messages, setMessages] = useState(ticket?.messages ?? [])
+  const [ticket, setTicket] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [messages, setMessages] = useState([])
   const [draft, setDraft] = useState('')
   const bottomRef = useRef(null)
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true)
+        const data = await fetchTicket(ticketId)
+        setTicket(data)
+        setMessages(data.messages ?? [])
+      } catch (error) {
+        toast.error(
+          error.response?.data?.detail || 'Impossible de charger le ticket.'
+        )
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [ticketId])
 
   // Descend automatiquement vers le dernier message.
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' })
   }, [messages])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-slate-500">
+        Chargement...
+      </div>
+    )
+  }
 
   if (!ticket) {
     return (
