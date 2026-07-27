@@ -22,6 +22,12 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('users.urls')),
     path('api/', include('logs_app.urls')),
+    path('api/', include('tickets.urls')),
+    path('api/', include('sla.urls')),
+    path('api/', include('escalation.urls')),
+    path('api/', include('reports.urls')),
+    path('api/', include('notifications.urls')),
+    path('api/', include('integrations.urls')),
 ]
  
 

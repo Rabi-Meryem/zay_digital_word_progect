@@ -8,6 +8,11 @@ from django.contrib.auth.models import (
 from .role import Role
 
 
+class SubscriptionPlan(models.TextChoices):
+    ESSENTIEL = "ESSENTIEL", "Essentiel"
+    STANDARD = "STANDARD", "Standard"
+    PREMIUM = "PREMIUM", "Premium"
+
 
 class UserManager(BaseUserManager):
     """
@@ -22,7 +27,7 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault("is_active", True)
 
         user = self.model(email=email, **extra_fields)
-        user.set_password(password)  # Hash sécurisé du mot de passe
+        user.set_password(password)
         user.save(using=self._db)
 
         return user
@@ -40,11 +45,9 @@ class UserManager(BaseUserManager):
         return self.create_user(email, password, **extra_fields)
 
 
-
 class User(AbstractBaseUser, PermissionsMixin):
     """
     Modèle utilisateur personnalisé.
-
     Authentification basée sur l'email au lieu du username.
     """
 
@@ -56,45 +59,31 @@ class User(AbstractBaseUser, PermissionsMixin):
     )
 
     first_name = models.CharField(max_length=100)
-
     last_name = models.CharField(max_length=100)
 
-    email = models.EmailField(
-        max_length=150,
-        unique=True,
-    )
+    email = models.EmailField(max_length=150, unique=True)
 
-    phone = models.CharField(
-        max_length=20,
-        blank=True,
-        null=True,
-    )
-
-    photo = models.CharField(
-        max_length=255,
-        blank=True,
-        null=True,
-    )
+    phone = models.CharField(max_length=20, blank=True, null=True)
+    photo = models.CharField(max_length=255, blank=True, null=True)
 
     is_active = models.BooleanField(default=True)
-
     email_verified = models.BooleanField(default=False)
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    plan = models.CharField(
+        max_length=20,
+        choices=SubscriptionPlan.choices,
+        default=SubscriptionPlan.ESSENTIEL,
+    )
 
+    created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    # Requis pour accéder à l'admin Django
     is_staff = models.BooleanField(default=False)
 
     objects = UserManager()
 
     USERNAME_FIELD = "email"
-
-    REQUIRED_FIELDS = [
-        "first_name",
-        "last_name",
-    ]
+    REQUIRED_FIELDS = ["first_name", "last_name"]
 
     class Meta:
         db_table = "users"
@@ -108,8 +97,6 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return f"{self.first_name} {self.last_name} ({self.role.name})"
-
-
 
     @property
     def is_client(self):

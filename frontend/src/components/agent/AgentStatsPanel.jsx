@@ -1,31 +1,31 @@
-import { useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { TrendingUp, CheckCircle2, Clock, Star } from 'lucide-react'
-import { MOCK_AGENT_TICKETS } from '../../data/mockAgentTickets'
+import toast from 'react-hot-toast'
+import { fetchMyStats } from '../../api/tickets'
 
 // « Mon évolution » — statistiques personnelles de l'agent.
-// TODO API : GET /api/agents/me/stats/?range=6m
-//   -> { monthly:[{month, resolved, avg_hours, satisfaction}], totals:{...} }
-// L'agent voit SA progression : volume traité, délai moyen, satisfaction.
-// Aucune identité client n'apparaît ici.
-
-const MONTHLY = [
-  { month: 'Fév', resolved: 18, avg_hours: 9.2, satisfaction: 4.1 },
-  { month: 'Mar', resolved: 24, avg_hours: 8.1, satisfaction: 4.3 },
-  { month: 'Avr', resolved: 21, avg_hours: 7.8, satisfaction: 4.2 },
-  { month: 'Mai', resolved: 29, avg_hours: 6.9, satisfaction: 4.5 },
-  { month: 'Juin', resolved: 33, avg_hours: 6.2, satisfaction: 4.6 },
-  { month: 'Juil', resolved: 27, avg_hours: 5.8, satisfaction: 4.7 },
-]
+// Branché sur GET /api/agents/me/stats/?months=6
 
 function AgentStatsPanel() {
-  const totals = useMemo(() => {
-    const totalResolved = MONTHLY.reduce((s, m) => s + m.resolved, 0)
-    const last = MONTHLY[MONTHLY.length - 1]
-    return { totalResolved, lastAvg: last.avg_hours, lastSat: last.satisfaction, lastResolved: last.resolved }
+  const [monthly, setMonthly] = useState([])
+  const [totals, setTotals] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchMyStats(6)
+      .then((data) => {
+        setMonthly(data.monthly)
+        setTotals(data.totals)
+      })
+      .catch(() => toast.error("Impossible de charger vos statistiques."))
+      .finally(() => setLoading(false))
   }, [])
+
+  if (loading) return <div className="p-6 text-slate-400 text-sm">Chargement...</div>
+  if (!totals) return <div className="p-6 text-slate-400 text-sm">Aucune donnée disponible.</div>
 
   return (
     <div className="space-y-5">
@@ -59,7 +59,7 @@ function AgentStatsPanel() {
       <div className="bg-white border border-slate-200 rounded-xl p-4">
         <p className="text-sm font-semibold text-slate-700 mb-3">Tickets résolus par mois</p>
         <ResponsiveContainer width="100%" height={220}>
-          <LineChart data={MONTHLY} margin={{ top: 5, right: 10, bottom: 0, left: -20 }}>
+          <LineChart data={monthly} margin={{ top: 5, right: 10, bottom: 0, left: -20 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
             <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#94a3b8' }} />
             <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
@@ -72,7 +72,7 @@ function AgentStatsPanel() {
       <div className="bg-white border border-slate-200 rounded-xl p-4">
         <p className="text-sm font-semibold text-slate-700 mb-3">Délai moyen de résolution (heures)</p>
         <ResponsiveContainer width="100%" height={220}>
-          <LineChart data={MONTHLY} margin={{ top: 5, right: 10, bottom: 0, left: -20 }}>
+          <LineChart data={monthly} margin={{ top: 5, right: 10, bottom: 0, left: -20 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
             <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#94a3b8' }} />
             <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} />

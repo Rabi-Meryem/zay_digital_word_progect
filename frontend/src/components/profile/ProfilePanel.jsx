@@ -3,20 +3,6 @@ import toast from 'react-hot-toast'
 import { User, Mail, Phone, Shield, Save } from 'lucide-react'
 import { fetchMyProfile, updateMyProfile, sendAdminRequest } from '../../api/profileService'
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Panneau « Mon profil » — partagé par les rôles (client, agent, superviseur).
-// Modifiable par l'utilisateur : prénom, nom, téléphone. Email en lecture seule.
-//   • Le RÔLE n'est jamais modifiable directement. Le CLIENT ne peut pas non
-//     plus en demander le changement. L'AGENT et le SUPERVISEUR peuvent en
-//     revanche envoyer une demande de changement de rôle à l'administrateur.
-//   • Le MOT DE PASSE ne se change plus du tout depuis ce panneau, pour aucun
-//     rôle : ça se passe sur l'écran de connexion, via « Mot de passe oublié »
-//     (voir ForgotPasswordModal), qui transmet la demande à l'administrateur.
-// Aligné sur le vrai UserSerializer : { first_name, last_name, email, phone,
-// role:{name}, ... } et PATCH /api/auth/me/ (ProfileUpdateSerializer).
-// Layout desktop : deux cartes côte à côte sur grand écran, pleine largeur.
-// ─────────────────────────────────────────────────────────────────────────────
-
 const ROLE_LABELS = {
   CLIENT: 'Client',
   AGENT: 'Agent support',
@@ -54,7 +40,6 @@ function ProfilePanel() {
 
   const roleName = profile?.role?.name ?? 'CLIENT'
   const roleLabel = ROLE_LABELS[roleName] ?? roleName
-  // Seul le client n'a jamais la possibilité de demander un changement de rôle.
   const canRequestRole = roleName !== 'CLIENT'
 
   const dirty =
@@ -103,7 +88,6 @@ function ProfilePanel() {
 
   return (
     <div className="max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-      {/* Carte 1 — Informations personnelles (modifiables) */}
       <div className="bg-white border border-slate-200 rounded-xl p-6">
         <h2 className="text-base font-semibold text-slate-800 mb-1">Mes informations</h2>
         <p className="text-xs text-slate-400 mb-4">
@@ -149,10 +133,6 @@ function ProfilePanel() {
         </button>
       </div>
 
-      {/* Carte 2 — Rôle : lecture seule pour tous ; demande de changement
-          possible pour agent/superviseur uniquement (pas le client). Le mot
-          de passe ne se gère plus ici pour personne : « Mot de passe oublié »
-          sur l'écran de connexion. */}
       <div className="bg-white border border-slate-200 rounded-xl p-6">
         <h2 className="text-base font-semibold text-slate-800 mb-1">Rôle et sécurité</h2>
         <p className="text-xs text-slate-400 mb-4">

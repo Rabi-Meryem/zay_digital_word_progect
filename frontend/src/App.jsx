@@ -10,23 +10,22 @@ import AgentDashboardPage from './pages/AgentDashboardPage'
 import AgentTicketPage from './pages/AgentTicketPage'
 import AgentChatPage from './pages/AgentChatPage'
 import AgentMessagesPage from './pages/AgentMessagesPage'
+import AgentProfilePage from './pages/AgentProfilePage'
+import AgentStatsPage from './pages/AgentStatsPage'
 import SupervisorDashboardPage from './pages/supervisor/SupervisorDashboardPage'
+import SupervisorProfilePage from './pages/SupervisorProfilePage'
 import TicketDetailPage from './pages/TicketDetailPage'
 import ProtectedRoute from './routes/ProtectedRoute'
 import { fetchMe } from './store/authSlice'
 import { getAccessToken } from './api/tokenStorage'
-import AgentProfilePage from './pages/AgentProfilePage'
-import AgentStatsPage from './pages/AgentStatsPage'
 import ClientProfilePage from './pages/ClientProfilePage'
-import AdminProfilePage from './pages/AdminProfilePage'
 import AdminUsersPage from './pages/AdminUsersPage'
+import { adminRoutes } from './routes/adminRoutes'
 
 function App() {
   const dispatch = useDispatch()
   const user = useSelector((state) => state.auth.user)
 
-  // Après un rechargement de page, le token reste dans localStorage mais le
-  // profil (nom, rôle...) a été perdu en mémoire : on le recharge une fois.
   useEffect(() => {
     if (getAccessToken() && !user) {
       dispatch(fetchMe())
@@ -68,6 +67,7 @@ function App() {
           </ProtectedRoute>
         }
       />
+      <Route path="/supervisor/profil" element={<ProtectedRoute><SupervisorProfilePage /></ProtectedRoute>} />
       <Route
         path="/tickets"
         element={
@@ -93,8 +93,7 @@ function App() {
         }
       />
       <Route path="/profil" element={<ProtectedRoute><ClientProfilePage /></ProtectedRoute>} />
-      <Route path="/admin/profil" element={<ProtectedRoute><AdminProfilePage /></ProtectedRoute>} />
-      <Route path="/admin/utilisateurs" element={<ProtectedRoute><AdminUsersPage /></ProtectedRoute>} /> 
+      {adminRoutes}
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   )
