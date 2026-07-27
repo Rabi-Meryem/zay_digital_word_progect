@@ -13,4 +13,5 @@ dist/
 *.log
 
 
+backend/reports/
 backend/tickets/

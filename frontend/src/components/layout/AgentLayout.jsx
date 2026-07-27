@@ -1,14 +1,16 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Outlet, NavLink } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import { Ticket, MessageSquare, LineChart, User, LogOut } from 'lucide-react'
 import { logout } from '../../store/authSlice'
-import { MOCK_AGENT_TICKETS } from '../../data/mockAgentTickets'
+import { fetchTickets } from '../../api/tickets'
 
-// Layout persistant du portail agent — même principe que ClientLayout :
-// une sidebar fixe à gauche (jamais masquée en desktop), le contenu change
-// à droite via <Outlet />. Toutes les pages agent (mes tickets, messages,
-// mon évolution, mon profil, détail d'un ticket) passent par ce layout :
-// la sidebar reste affichée quel que soit l'écran visité.
+// Layout persistant du portail agent — sidebar fixe à gauche (jamais masquée
+// en desktop), le contenu change à droite via <Outlet />.
+//
+// Les badges sont calculés depuis les vrais tickets assignés à l'agent.
+// ⚠️ Le compteur de messages non lus reste à 0 tant que GET /api/messages/
+// n'existe pas côté backend.
 
 const RESOLVED_STATUSES = ['RESOLVED', 'CLOSED']
 
@@ -31,19 +33,20 @@ function initials(name) {
 function AgentLayout() {
   const user = useSelector((state) => state.auth.user)
   const dispatch = useDispatch()
-  const navigate = useNavigate()
+  const [tickets, setTickets] = useState([])
 
-  const agentName = user ? `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim() : 'Ahmed Karimi'
+  const agentName = user ? `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim() : 'Agent'
 
-  const activeTickets = MOCK_AGENT_TICKETS.filter((t) => !RESOLVED_STATUSES.includes(t.current_status))
+  useEffect(() => {
+    fetchTickets({ page_size: 100 })
+      .then((data) => setTickets(data.results ?? []))
+      .catch(() => setTickets([]))
+  }, [])
+
+  const activeTickets = tickets.filter((t) => !RESOLVED_STATUSES.includes(t.current_status))
   const criticalCount = activeTickets.filter((t) => t.priority === 'CRITICAL').length
-  const unreadTotal = activeTickets.reduce((sum, t) => sum + (t.unread_messages ?? 0), 0)
 
-  const badgeFor = (to) => {
-    if (to === '/agent/dashboard') return criticalCount
-    if (to === '/agent/messages') return unreadTotal
-    return 0
-  }
+  const badgeFor = (to) => (to === '/agent/dashboard' ? criticalCount : 0)
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
