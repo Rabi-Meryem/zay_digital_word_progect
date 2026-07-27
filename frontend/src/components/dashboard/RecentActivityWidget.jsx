@@ -35,7 +35,14 @@ function formatAgo(iso) {
   return `il y a ${Math.floor(hours / 24)} j`
 }
 
-function RecentActivityWidget() {
+// ⚠️ GET /api/tickets/history/ ne renvoie pas l'id numérique du ticket,
+// seulement ticket_number. On le retrouve dans la liste déjà chargée par
+// ClientOverviewPage (fetchTickets, qui elle renvoie id + ticket_number)
+// pour construire un lien de détail valide.
+// TODO backend (Rabi-Meryem) : ajouter le champ `id` directement dans le
+// serializer de /api/tickets/history/ pour supprimer ce contournement.
+
+function RecentActivityWidget({ tickets = [] }) {
   const [activites, setActivites] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -45,6 +52,9 @@ function RecentActivityWidget() {
       .catch(() => toast.error("Impossible de charger les activités récentes."))
       .finally(() => setLoading(false))
   }, [])
+
+  const findTicketId = (ticketNumber) =>
+    tickets.find((t) => t.ticket_number === ticketNumber)?.id
 
   return (
     <div className="bg-white rounded-lg border border-slate-200 p-4">
@@ -58,6 +68,7 @@ function RecentActivityWidget() {
         <ol className="space-y-3">
           {activites.map((a) => {
             const status = a.last_action?.new_status ?? a.current_status
+            const id = findTicketId(a.ticket_number)
             return (
               <li key={a.ticket_number} className="flex gap-2.5">
                 <span
@@ -66,9 +77,13 @@ function RecentActivityWidget() {
                 />
                 <div className="min-w-0 flex-1">
                   <p className="text-xs text-slate-700 leading-snug">
-                    <Link to={`/tickets/${a.ticket_number}`} className="font-medium text-slate-800 hover:text-secondary">
-                      {a.ticket_number}
-                    </Link>{' '}
+                    {id ? (
+                      <Link to={`/tickets/${id}`} className="font-medium text-slate-800 hover:text-secondary">
+                        {a.ticket_number}
+                      </Link>
+                    ) : (
+                      <span className="font-medium text-slate-800">{a.ticket_number}</span>
+                    )}{' '}
                     — {STATUS_LABEL[status] ?? status}
                   </p>
                   <p className="text-[11px] text-slate-400 mt-0.5">

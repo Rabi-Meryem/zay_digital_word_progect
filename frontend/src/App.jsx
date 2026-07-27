@@ -2,9 +2,11 @@ import { useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import LoginPage from './pages/LoginPage'
+import ClientLayout from './components/layout/ClientLayout'
 import ClientOverviewPage from './pages/ClientOverviewPage'
 import ClientTicketsPage from './pages/ClientTicketsPage'
 import NewTicketPage from './pages/NewTicketPage'
+import ClientProfilePage from './pages/ClientProfilePage'
 import AgentLayout from './components/layout/AgentLayout'
 import AgentDashboardPage from './pages/AgentDashboardPage'
 import AgentTicketPage from './pages/AgentTicketPage'
@@ -18,8 +20,6 @@ import TicketDetailPage from './pages/TicketDetailPage'
 import ProtectedRoute from './routes/ProtectedRoute'
 import { fetchMe } from './store/authSlice'
 import { getAccessToken } from './api/tokenStorage'
-import ClientProfilePage from './pages/ClientProfilePage'
-import AdminUsersPage from './pages/AdminUsersPage'
 import { adminRoutes } from './routes/adminRoutes'
 
 function App() {
@@ -36,14 +36,22 @@ function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+
+      {/* Portail client — sidebar persistante (ClientLayout + <Outlet />) */}
       <Route
-        path="/dashboard"
         element={
           <ProtectedRoute>
-            <ClientOverviewPage />
+            <ClientLayout />
           </ProtectedRoute>
         }
-      />
+      >
+        <Route path="/dashboard" element={<ClientOverviewPage />} />
+        <Route path="/tickets" element={<ClientTicketsPage />} />
+        <Route path="/tickets/nouveau" element={<NewTicketPage />} />
+        <Route path="/tickets/:ticketId" element={<TicketDetailPage />} />
+        <Route path="/profil" element={<ClientProfilePage />} />
+      </Route>
+
       <Route
         path="/agent"
         element={
@@ -59,6 +67,7 @@ function App() {
         <Route path="profil" element={<AgentProfilePage />} />
         <Route path="stats" element={<AgentStatsPage />} />
       </Route>
+
       <Route
         path="/supervisor/dashboard"
         element={
@@ -68,31 +77,7 @@ function App() {
         }
       />
       <Route path="/supervisor/profil" element={<ProtectedRoute><SupervisorProfilePage /></ProtectedRoute>} />
-      <Route
-        path="/tickets"
-        element={
-          <ProtectedRoute>
-            <ClientTicketsPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/tickets/nouveau"
-        element={
-          <ProtectedRoute>
-            <NewTicketPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/tickets/:ticketId"
-        element={
-          <ProtectedRoute>
-            <TicketDetailPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route path="/profil" element={<ProtectedRoute><ClientProfilePage /></ProtectedRoute>} />
+
       {adminRoutes}
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
