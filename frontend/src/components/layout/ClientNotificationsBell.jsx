@@ -1,67 +1,17 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, MessageSquare, Ticket, AlertTriangle, CheckCircle2, Check } from 'lucide-react'
+import { Bell, Check } from 'lucide-react'
 
-// Cloche de notifications temps réel du portail client — même principe que
-// components/agent/NotificationsPanel.jsx côté agent, pour que les 4 rôles
-// (client, agent, superviseur, admin) disposent tous d'un centre de
-// notifications cohérent dans leur en-tête.
+// Cloche de notifications temps réel du portail client.
 //
-// ⚠️ Données de démonstration — à remplacer par GET /api/notifications/
-// (+ WebSocket) quand la route existera côté backend.
-
-const INITIAL_NOTIFICATIONS = [
-  {
-    id: 1,
-    type: 'STATUS_CHANGE',
-    text: 'Votre ticket #00046 est passé « En cours de traitement »',
-    minutesAgo: 8,
-    read: false,
-    ticketId: 46,
-  },
-  {
-    id: 2,
-    type: 'NEW_MESSAGE',
-    text: "L'agent a répondu sur le ticket #00048",
-    minutesAgo: 25,
-    read: false,
-    ticketId: 48,
-  },
-  {
-    id: 3,
-    type: 'SLA_WARNING',
-    text: 'Le ticket #00043 approche de son échéance SLA',
-    minutesAgo: 90,
-    read: false,
-    ticketId: 43,
-  },
-  {
-    id: 4,
-    type: 'RESOLVED',
-    text: 'Votre ticket #00040 a été résolu',
-    minutesAgo: 620,
-    read: true,
-    ticketId: 40,
-  },
-]
-
-const TYPE_ICONS = {
-  NEW_MESSAGE: MessageSquare,
-  SLA_WARNING: AlertTriangle,
-  STATUS_CHANGE: Ticket,
-  RESOLVED: CheckCircle2,
-}
-
-function formatAgo(minutes) {
-  if (minutes < 60) return `il y a ${minutes} min`
-  const h = Math.floor(minutes / 60)
-  if (h < 24) return `il y a ${h} h`
-  return `il y a ${Math.floor(h / 24)} j`
-}
+// ⚠️ En attente de GET /api/notifications/ (+ WebSocket) côté backend.
+// Tant que cette route n'existe pas, la cloche reste vide plutôt que
+// d'afficher de fausses notifications pointant vers des tickets qui
+// n'existent pas réellement.
 
 function ClientNotificationsBell({ variant = 'light' }) {
   const [open, setOpen] = useState(false)
-  const [items, setItems] = useState(INITIAL_NOTIFICATIONS)
+  const [items, setItems] = useState([])
   const navigate = useNavigate()
 
   const unreadCount = items.filter((n) => !n.read).length
@@ -113,10 +63,11 @@ function ClientNotificationsBell({ variant = 'light' }) {
               )}
             </div>
 
-            <ul className="max-h-80 overflow-y-auto divide-y divide-slate-50">
-              {items.map((n) => {
-                const Icon = TYPE_ICONS[n.type] ?? Bell
-                return (
+            {items.length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-8">Aucune notification pour le moment.</p>
+            ) : (
+              <ul className="max-h-80 overflow-y-auto divide-y divide-slate-50">
+                {items.map((n) => (
                   <li key={n.id}>
                     <button
                       type="button"
@@ -125,23 +76,15 @@ function ClientNotificationsBell({ variant = 'light' }) {
                         n.read ? 'opacity-60' : ''
                       }`}
                     >
-                      <span
-                        className={`mt-0.5 shrink-0 ${
-                          n.type === 'SLA_WARNING' ? 'text-accent' : 'text-secondary'
-                        }`}
-                      >
-                        <Icon size={15} />
-                      </span>
                       <span className="min-w-0">
                         <span className="block text-sm text-slate-700 leading-snug">{n.text}</span>
-                        <span className="block text-xs text-slate-400 mt-0.5">{formatAgo(n.minutesAgo)}</span>
                       </span>
                       {!n.read && <span className="ml-auto mt-1.5 h-2 w-2 rounded-full bg-secondary shrink-0" />}
                     </button>
                   </li>
-                )
-              })}
-            </ul>
+                ))}
+              </ul>
+            )}
           </div>
         </>
       )}

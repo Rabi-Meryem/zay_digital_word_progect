@@ -5,6 +5,10 @@
 
 // Journal des interventions par ticket (clé = ticket.id de mockTickets.js).
 export const MOCK_INTERVENTIONS = {
+  1: [
+    { heure: '09:12', libelle: 'Ticket créé', type: 'client' },
+    { heure: '09:13', libelle: 'Classification automatique effectuée par l\'IA', type: 'ia' },
+  ],
   46: [
     { heure: '09:12', libelle: 'Ticket créé', type: 'client' },
     { heure: '09:13', libelle: "Classification automatique : Critique (confiance 94 %)", type: 'ia' },

@@ -70,7 +70,7 @@ function ClientOverviewPage() {
 
       <div className="grid lg:grid-cols-2 gap-4">
         <PriorityTicketsWidget tickets={tickets} />
-        <RecentActivityWidget />
+        <RecentActivityWidget tickets={tickets} />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-4 pb-6">
