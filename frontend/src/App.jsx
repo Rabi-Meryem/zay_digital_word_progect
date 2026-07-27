@@ -5,18 +5,19 @@ import LoginPage from './pages/LoginPage'
 import ClientOverviewPage from './pages/ClientOverviewPage'
 import ClientTicketsPage from './pages/ClientTicketsPage'
 import NewTicketPage from './pages/NewTicketPage'
+import AgentLayout from './components/layout/AgentLayout'
 import AgentDashboardPage from './pages/AgentDashboardPage'
 import AgentTicketPage from './pages/AgentTicketPage'
 import AgentChatPage from './pages/AgentChatPage'
 import AgentMessagesPage from './pages/AgentMessagesPage'
+import AgentProfilePage from './pages/AgentProfilePage'
+import AgentStatsPage from './pages/AgentStatsPage'
 import SupervisorDashboardPage from './pages/supervisor/SupervisorDashboardPage'
+import SupervisorProfilePage from './pages/SupervisorProfilePage'
 import TicketDetailPage from './pages/TicketDetailPage'
 import ProtectedRoute from './routes/ProtectedRoute'
 import { fetchMe } from './store/authSlice'
 import { getAccessToken } from './api/tokenStorage'
-import SupervisorProfilePage from './pages/SupervisorProfilePage'
-import AgentProfilePage from './pages/AgentProfilePage'
-import AgentStatsPage from './pages/AgentStatsPage'
 import ClientProfilePage from './pages/ClientProfilePage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import { adminRoutes } from './routes/adminRoutes'
@@ -25,8 +26,6 @@ function App() {
   const dispatch = useDispatch()
   const user = useSelector((state) => state.auth.user)
 
-  // Après un rechargement de page, le token reste dans localStorage mais le
-  // profil (nom, rôle...) a été perdu en mémoire : on le recharge une fois.
   useEffect(() => {
     if (getAccessToken() && !user) {
       dispatch(fetchMe())
@@ -46,29 +45,20 @@ function App() {
         }
       />
       <Route
-        path="/agent/dashboard"
+        path="/agent"
         element={
           <ProtectedRoute>
-            <AgentDashboardPage />
+            <AgentLayout />
           </ProtectedRoute>
         }
-      />
-      <Route
-        path="/agent/tickets/:ticketId"
-        element={
-          <ProtectedRoute>
-            <AgentTicketPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/agent/tickets/:ticketId/messages"
-        element={
-          <ProtectedRoute>
-            <AgentChatPage />
-          </ProtectedRoute>
-        }
-      />
+      >
+        <Route path="dashboard" element={<AgentDashboardPage />} />
+        <Route path="tickets/:ticketId" element={<AgentTicketPage />} />
+        <Route path="tickets/:ticketId/messages" element={<AgentChatPage />} />
+        <Route path="messages" element={<AgentMessagesPage />} />
+        <Route path="profil" element={<AgentProfilePage />} />
+        <Route path="stats" element={<AgentStatsPage />} />
+      </Route>
       <Route
         path="/supervisor/dashboard"
         element={
@@ -77,14 +67,7 @@ function App() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/agent/messages"
-        element={
-          <ProtectedRoute>
-            <AgentMessagesPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/supervisor/profil" element={<ProtectedRoute><SupervisorProfilePage /></ProtectedRoute>} />
       <Route
         path="/tickets"
         element={
@@ -106,23 +89,6 @@ function App() {
         element={
           <ProtectedRoute>
             <TicketDetailPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route path="/supervisor/profil" element={<ProtectedRoute><SupervisorProfilePage /></ProtectedRoute>} />
-      <Route
-        path="/agent/profil"
-        element={
-          <ProtectedRoute>
-            <AgentProfilePage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/agent/stats"
-        element={
-          <ProtectedRoute>
-            <AgentStatsPage />
           </ProtectedRoute>
         }
       />
