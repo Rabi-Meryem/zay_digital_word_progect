@@ -30,10 +30,30 @@ function AgentStatsPanel() {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard icon={CheckCircle2} label="Résolus (6 mois)" value={totals.totalResolved} className="text-secondary" />
-        <StatCard icon={TrendingUp} label="Résolus ce mois" value={totals.lastResolved} className="text-primary" />
-        <StatCard icon={Clock} label="Délai moyen" value={`${totals.lastAvg} h`} className="text-accent" />
-        <StatCard icon={Star} label="Satisfaction" value={`${totals.lastSat}/5`} className="text-amber-500" />
+        <StatCard
+          icon={CheckCircle2}
+          label="Résolus (6 mois)"
+          value={totals.totalResolved}
+          gradient="from-sky-500 to-blue-600"
+        />
+        <StatCard
+          icon={TrendingUp}
+          label="Résolus ce mois"
+          value={totals.lastResolved}
+          gradient="from-indigo-500 to-violet-600"
+        />
+        <StatCard
+          icon={Clock}
+          label="Délai moyen"
+          value={`${totals.lastAvg} h`}
+          gradient="from-orange-400 to-amber-500"
+        />
+        <StatCard
+          icon={Star}
+          label="Satisfaction"
+          value={`${totals.lastSat}/5`}
+          gradient="from-emerald-400 to-teal-500"
+        />
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl p-4">
@@ -65,12 +85,14 @@ function AgentStatsPanel() {
   )
 }
 
-function StatCard({ icon: Icon, label, value, className }) {
+function StatCard({ icon: Icon, label, value, gradient }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-xl px-4 py-3">
-      <Icon size={16} className={className} />
-      <p className={`text-2xl font-bold mt-1 ${className}`}>{value}</p>
-      <p className="text-xs text-slate-500 mt-0.5">{label}</p>
+    <div className={`bg-gradient-to-br ${gradient} rounded-xl px-4 py-3.5 text-white shadow-sm`}>
+      <div className="flex items-center justify-between">
+        <Icon size={18} className="text-white/80" />
+      </div>
+      <p className="text-2xl font-bold mt-1.5">{value}</p>
+      <p className="text-xs text-white/80 mt-0.5">{label}</p>
     </div>
   )
 }

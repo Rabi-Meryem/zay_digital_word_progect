@@ -26,7 +26,6 @@ const STATUS_RANK = {
 
 const STATUS_OPTIONS = [
   { value: 'IN_PROGRESS', label: 'En cours' },
-  { value: 'WAITING', label: 'En attente client' },
   { value: 'ESCALATED', label: 'Escaladé' },
   { value: 'RESOLVED', label: 'Résolu' },
 ]
@@ -97,6 +96,10 @@ function AgentTicketPage() {
 
   const shortNumber = ticket.ticket_number.split('-').pop()
   const isResolved = ['RESOLVED', 'CLOSED'].includes(status)
+  // Une fois escaladé, l'agent perd la main sur ce ticket : il ne peut plus le
+  // marquer résolu ni continuer à échanger avec le client depuis cet écran.
+  const isEscalated = status === 'ESCALATED'
+  const isLocked = isEscalated || isResolved
 
   const changeStatus = (value) => {
     setStatus(value)
@@ -112,29 +115,29 @@ function AgentTicketPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="bg-primary text-primary-foreground px-4 sm:px-6 py-4">
-        <div className="max-w-4xl mx-auto flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigate('/agent/dashboard')}
-            className="opacity-80 hover:opacity-100"
-            aria-label="Retour à la console"
-          >
-            <ArrowLeft size={18} />
-          </button>
-          <div className="min-w-0 flex-1">
-            <p className="font-semibold text-sm sm:text-base">Ticket #{shortNumber}</p>
-            <p className="text-xs text-primary-foreground/70 truncate">{ticket.title}</p>
+    <div className="bg-slate-50 min-h-full">
+      <main className="max-w-6xl mx-auto p-4 sm:p-6">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="min-w-0">
+            <button
+              type="button"
+              onClick={() => navigate('/agent/dashboard')}
+              className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-2"
+            >
+              <ArrowLeft size={16} />
+              Retour à mes tickets
+            </button>
+            <h1 className="text-lg font-semibold text-slate-800 truncate">
+              Ticket #{shortNumber} · {ticket.title}
+            </h1>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 shrink-0">
             <PriorityBadge priority={ticket.priority} />
             <StatusBadge status={status} />
           </div>
         </div>
-      </header>
 
-      <main className="max-w-4xl mx-auto p-4 sm:p-6 grid gap-4 md:grid-cols-[1.6fr_1fr] items-start">
+        <div className="grid gap-4 md:grid-cols-[1.6fr_1fr] items-start">
         {/* ── Colonne gauche : diagnostic ─────────────────────────────────── */}
         <div className="space-y-4">
           <section className="bg-white border border-slate-200 rounded-xl p-4">
@@ -260,7 +263,8 @@ function AgentTicketPage() {
             <select
               value={STATUS_OPTIONS.some((o) => o.value === status) ? status : ''}
               onChange={(e) => changeStatus(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-secondary/50"
+              disabled={isLocked}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-secondary/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-50"
               aria-label="Statut du ticket"
             >
               {!STATUS_OPTIONS.some((o) => o.value === status) && (
@@ -274,6 +278,11 @@ function AgentTicketPage() {
                 </option>
               ))}
             </select>
+            {isEscalated && (
+              <p className="text-[11px] text-slate-400 mt-1.5">
+                Ticket escaladé : le statut est désormais géré par le superviseur.
+              </p>
+            )}
           </section>
 
           <section className="bg-white border border-slate-200 rounded-xl p-4">
@@ -283,17 +292,23 @@ function AgentTicketPage() {
             <div className="space-y-2">
               <button
                 type="button"
+                disabled={isLocked}
                 onClick={() => navigate(`/agent/tickets/${ticket.id}/messages`)}
-                className="w-full flex items-center justify-center gap-2 text-sm text-slate-700 border border-slate-200 rounded-lg py-2 hover:bg-slate-50"
+                className="w-full flex items-center justify-center gap-2 text-sm text-slate-700 border border-slate-200 rounded-lg py-2 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <MessageSquare size={15} />
                 Messagerie client
                 {ticket.unread_messages ? ` (${ticket.unread_messages})` : ''}
               </button>
+              {isEscalated && (
+                <p className="text-[11px] text-slate-400 -mt-1">
+                  Ticket escaladé : la messagerie et la résolution sont désormais gérées par le superviseur.
+                </p>
+              )}
 
               <button
                 type="button"
-                disabled={isResolved}
+                disabled={isLocked}
                 onClick={() => changeStatus('RESOLVED')}
                 className="w-full flex items-center justify-center gap-2 text-sm font-medium bg-success text-white rounded-lg py-2 hover:bg-success/90 transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -303,7 +318,7 @@ function AgentTicketPage() {
 
               <button
                 type="button"
-                disabled={status === 'ESCALATED' || isResolved}
+                disabled={isLocked}
                 onClick={() => setShowEscalation(true)}
                 className="w-full flex items-center justify-center gap-2 text-sm text-danger border border-danger/30 rounded-lg py-2 hover:bg-danger/5 transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -312,6 +327,7 @@ function AgentTicketPage() {
               </button>
             </div>
           </section>
+        </div>
         </div>
       </main>
 

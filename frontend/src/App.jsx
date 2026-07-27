@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage'
 import ClientOverviewPage from './pages/ClientOverviewPage'
 import ClientTicketsPage from './pages/ClientTicketsPage'
 import NewTicketPage from './pages/NewTicketPage'
+import AgentLayout from './components/layout/AgentLayout'
 import AgentDashboardPage from './pages/AgentDashboardPage'
 import AgentTicketPage from './pages/AgentTicketPage'
 import AgentChatPage from './pages/AgentChatPage'
@@ -45,42 +46,25 @@ function App() {
         }
       />
       <Route
-        path="/agent/dashboard"
+        path="/agent"
         element={
           <ProtectedRoute>
-            <AgentDashboardPage />
+            <AgentLayout />
           </ProtectedRoute>
         }
-      />
-      <Route
-        path="/agent/tickets/:ticketId"
-        element={
-          <ProtectedRoute>
-            <AgentTicketPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/agent/tickets/:ticketId/messages"
-        element={
-          <ProtectedRoute>
-            <AgentChatPage />
-          </ProtectedRoute>
-        }
-      />
+      >
+        <Route path="dashboard" element={<AgentDashboardPage />} />
+        <Route path="tickets/:ticketId" element={<AgentTicketPage />} />
+        <Route path="tickets/:ticketId/messages" element={<AgentChatPage />} />
+        <Route path="messages" element={<AgentMessagesPage />} />
+        <Route path="profil" element={<AgentProfilePage />} />
+        <Route path="stats" element={<AgentStatsPage />} />
+      </Route>
       <Route
         path="/supervisor/dashboard"
         element={
           <ProtectedRoute>
             <SupervisorDashboardPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/agent/messages"
-        element={
-          <ProtectedRoute>
-            <AgentMessagesPage />
           </ProtectedRoute>
         }
       />
@@ -105,22 +89,6 @@ function App() {
         element={
           <ProtectedRoute>
             <TicketDetailPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/agent/profil"
-        element={
-          <ProtectedRoute>
-            <AgentProfilePage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/agent/stats"
-        element={
-          <ProtectedRoute>
-            <AgentStatsPage />
           </ProtectedRoute>
         }
       />

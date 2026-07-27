@@ -54,32 +54,27 @@ function AgentChatPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      <header className="bg-primary text-primary-foreground px-4 sm:px-6 py-4">
-        <div className="max-w-2xl mx-auto flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigate(`/agent/tickets/${ticket.id}`)}
-            className="opacity-80 hover:opacity-100"
-            aria-label="Retour à la fiche du ticket"
-          >
-            <ArrowLeft size={18} />
-          </button>
-          <div className="min-w-0 flex-1">
-            <p className="font-semibold text-sm sm:text-base">
-              Messagerie — Ticket #{shortNumber}
-            </p>
-            <p className="text-xs text-primary-foreground/70 truncate">
-              Client · Ticket #{shortNumber}
-            </p>
-          </div>
-          <PriorityBadge priority={ticket.priority} />
+    <div className="bg-slate-50 min-h-full flex flex-col">
+      <div className="max-w-4xl mx-auto w-full p-4 sm:p-6 pb-0 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => navigate(`/agent/tickets/${ticket.id}`)}
+          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700"
+        >
+          <ArrowLeft size={16} />
+          Retour au ticket
+        </button>
+        <div className="min-w-0 flex-1">
+          <h1 className="text-base font-semibold text-slate-800 truncate">
+            Messagerie — Ticket #{shortNumber}
+          </h1>
         </div>
-      </header>
+        <PriorityBadge priority={ticket.priority} />
+      </div>
 
       {/* ── Fil de messages ─────────────────────────────────────────────── */}
       <main className="flex-1 overflow-y-auto">
-        <div className="max-w-2xl mx-auto p-4 space-y-4">
+        <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-4">
           {messages.length === 0 && (
             <p className="text-center text-sm text-slate-400 py-10">
               Aucun message pour l'instant — écris au client pour démarrer l'échange.
@@ -118,7 +113,7 @@ function AgentChatPage() {
 
       {/* ── Zone de saisie ──────────────────────────────────────────────── */}
       <footer className="bg-white border-t border-slate-200 px-4 py-3">
-        <div className="max-w-2xl mx-auto flex items-center gap-2">
+        <div className="max-w-4xl mx-auto flex items-center gap-2">
           <input
             type="text"
             value={draft}
