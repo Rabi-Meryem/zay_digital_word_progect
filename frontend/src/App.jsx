@@ -14,7 +14,13 @@ import AgentChatPage from './pages/AgentChatPage'
 import AgentMessagesPage from './pages/AgentMessagesPage'
 import AgentProfilePage from './pages/AgentProfilePage'
 import AgentStatsPage from './pages/AgentStatsPage'
-import SupervisorDashboardPage from './pages/supervisor/SupervisorDashboardPage'
+import SupervisorLayout from './components/layout/SupervisorLayout'
+import SupervisorOverviewPage from './pages/supervisor/SupervisorOverviewPage'
+import SupervisorEscalationsPage from './pages/supervisor/SupervisorEscalationsPage'
+import SupervisorAssignmentPage from './pages/supervisor/SupervisorAssignmentPage'
+import SupervisorCriticalityPage from './pages/supervisor/SupervisorCriticalityPage'
+import SupervisorTeamPage from './pages/supervisor/SupervisorTeamPage'
+import SupervisorReportsPage from './pages/supervisor/SupervisorReportsPage'
 import SupervisorProfilePage from './pages/SupervisorProfilePage'
 import TicketDetailPage from './pages/TicketDetailPage'
 import ProtectedRoute from './routes/ProtectedRoute'
@@ -52,6 +58,7 @@ function App() {
         <Route path="/profil" element={<ClientProfilePage />} />
       </Route>
 
+      {/* Portail agent — sidebar persistante (AgentLayout + <Outlet />) */}
       <Route
         path="/agent"
         element={
@@ -68,15 +75,23 @@ function App() {
         <Route path="stats" element={<AgentStatsPage />} />
       </Route>
 
+      {/* Portail superviseur — sidebar persistante (SupervisorLayout + <Outlet />) */}
       <Route
-        path="/supervisor/dashboard"
+        path="/supervisor"
         element={
           <ProtectedRoute>
-            <SupervisorDashboardPage />
+            <SupervisorLayout />
           </ProtectedRoute>
         }
-      />
-      <Route path="/supervisor/profil" element={<ProtectedRoute><SupervisorProfilePage /></ProtectedRoute>} />
+      >
+        <Route path="dashboard" element={<SupervisorOverviewPage />} />
+        <Route path="escalades" element={<SupervisorEscalationsPage />} />
+        <Route path="affectation" element={<SupervisorAssignmentPage />} />
+        <Route path="criticite" element={<SupervisorCriticalityPage />} />
+        <Route path="equipe" element={<SupervisorTeamPage />} />
+        <Route path="rapports" element={<SupervisorReportsPage />} />
+        <Route path="profil" element={<SupervisorProfilePage />} />
+      </Route>
 
       {adminRoutes}
       <Route path="*" element={<Navigate to="/login" replace />} />
