@@ -26,15 +26,17 @@ export default function AdminEscalationsPage() {
 
   const filtered = useMemo(
     () => items.filter((e) => {
-      if (filter === "AUTO") return e.type === "AUTO";
-      if (filter === "MANUAL") return e.type === "MANUAL";
-      if (filter === "OPEN") return !e.is_resolved;
-      return true;
+      const type = e.escalation_type ?? e.type
+      const resolved = e.resolved ?? e.is_resolved
+      if (filter === "AUTO") return type === "AUTO"
+      if (filter === "MANUAL") return type === "MANUAL"
+      if (filter === "OPEN") return !resolved
+      return true
     }),
     [items, filter]
   );
 
-  const enCours = items.filter((e) => !e.is_resolved).length;
+  const enCours = items.filter((e) => !(e.resolved ?? e.is_resolved)).length;
 
   const resolve = (id) =>
     escalationApi.resolve(id).catch(() => {}).finally(() => {
@@ -64,18 +66,18 @@ export default function AdminEscalationsPage() {
               <div className="flex items-center justify-between">
                 <div className="font-semibold text-[#1E3A5F]">#{e.ticket_number}</div>
                 <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                  e.is_resolved ? "bg-green-100 text-green-700"
-                    : e.type === "AUTO" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
-                  {e.is_resolved ? "RÉSOLUE" : e.type === "AUTO" ? "AUTOMATIQUE" : "MANUELLE"}
+                  (e.resolved ?? e.is_resolved) ? "bg-green-100 text-green-700"
+                    : (e.escalation_type ?? e.type) === "AUTO" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
+                  {(e.resolved ?? e.is_resolved) ? "RÉSOLUE" : (e.escalation_type ?? e.type) === "AUTO" ? "AUTOMATIQUE" : "MANUELLE"}
                 </span>
               </div>
               <div className="text-sm text-slate-600 mt-1">
-                {e.type === "AUTO"
+                {(e.escalation_type ?? e.type) === "AUTO"
                   ? `Escalade automatique (risque SLA) → ${e.to_supervisor}`
                   : `Escaladé par ${e.from_agent} → ${e.to_supervisor} (superviseur)`} · {e.when}
               </div>
               <div className="text-sm text-slate-500 mt-1">Motif : {e.reason}</div>
-              {!e.is_resolved && (
+              {!(e.resolved ?? e.is_resolved) && (
                 <button onClick={(ev) => { ev.stopPropagation(); resolve(e.id); }}
                   className="mt-3 text-sm text-[#2D6A9F] hover:underline">
                   Marquer comme résolue
@@ -89,7 +91,7 @@ export default function AdminEscalationsPage() {
       <Modal open={!!detail} title={detail ? `Escalade #${detail.ticket_number}` : ""} onClose={() => setDetail(null)}>
         {detail && (
           <div className="space-y-2 text-sm">
-            <div><span className="text-slate-400">Type : </span>{detail.type === "AUTO" ? "Automatique" : "Manuelle"}</div>
+            <div><span className="text-slate-400">Type : </span>{(detail.escalation_type ?? detail.type) === "AUTO" ? "Automatique" : "Manuelle"}</div>
             {detail.from_agent && <div><span className="text-slate-400">Origine : </span>{detail.from_agent}</div>}
             <div><span className="text-slate-400">Destinataire : </span>{detail.to_supervisor}</div>
             <div><span className="text-slate-400">Quand : </span>{detail.when}</div>

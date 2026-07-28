@@ -85,7 +85,7 @@ const roleLabel = (name) =>
         <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}
           className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
           <option value="">Tous les rôles</option>
-          {roleOptions.map((r) => <option key={r.name} value={r.name}>{r.label}</option>)}
+          {roleOptions.map((r) => <option key={r.name} value={r.name}>{r.label ?? r.name}</option>)}
         </select>
       </div>
 
@@ -176,7 +176,7 @@ function CreateModal({ onClose, onDone ,roleOptions }) {
         <input placeholder="Email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
         <input placeholder="Téléphone" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
         <select value={f.role_id} onChange={(e) => setF({ ...f, role_id: Number(e.target.value) })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-          {roleOptions.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+          {roleOptions.map((r) => <option key={r.id} value={r.id}>{r.label ?? r.name}</option>)}
         </select>
         <input type="password" placeholder="Mot de passe initial" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
         <button type="button" onClick={submit} className="w-full bg-primary text-white rounded-lg py-2 text-sm font-medium hover:bg-primary/90">Créer le compte</button>
@@ -195,7 +195,7 @@ function RoleModal({ user, onClose, onDone , roleOptions}) {
   return (
     <Overlay title={`Rôle — ${user.first_name} ${user.last_name}`} onClose={onClose}>
       <select value={roleId} onChange={(e) => setRoleId(Number(e.target.value))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white mb-3">
-        {roleOptions.filter((r) => r.name === 'AGENT' || r.name === 'SUPERVISOR').map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+        {roleOptions.filter((r) => r.name === 'AGENT' || r.name === 'SUPERVISOR').map((r) => <option key={r.id} value={r.id}>{r.label ?? r.name}</option>)}
       </select>
       <button type="button" onClick={submit} className="w-full bg-primary text-white rounded-lg py-2 text-sm font-medium hover:bg-primary/90">Enregistrer</button>
     </Overlay>
