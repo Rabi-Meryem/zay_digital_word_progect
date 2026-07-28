@@ -8,16 +8,12 @@ import { AdminPageHeader } from "../../components/admin/AdminLayout";
 import { logsApi } from "../../api/adminApi";
 import { mockLogStats } from "../../api/adminMocks";
 
-function KpiCard({ value, label, tone = "navy" }) {
-  const tones = {
-    navy: "text-[#1E3A5F]",
-    warn: "text-orange-600",
-    danger: "text-red-600",
-  };
+function KpiCard({ value, label, degrade = "from-blue-500 to-indigo-600" }) {
   return (
-    <div className="bg-white rounded-lg border border-slate-200 p-5">
-      <div className={`text-3xl font-bold ${tones[tone]}`}>{value}</div>
-      <div className="text-xs uppercase tracking-wide text-slate-500 mt-1">{label}</div>
+    <div className={`relative overflow-hidden rounded-xl p-5 text-white shadow-sm bg-gradient-to-br ${degrade}`}>
+      <span className="pointer-events-none absolute -right-6 -top-6 h-20 w-20 rounded-full bg-white/15" aria-hidden="true" />
+      <div className="relative text-3xl font-bold drop-shadow-sm">{value}</div>
+      <div className="relative text-xs uppercase tracking-wide text-white/85 mt-1">{label}</div>
     </div>
   );
 }
@@ -52,9 +48,9 @@ export default function AdminOverviewPage() {
       />
       <div className="p-8 space-y-6">
         <div className="grid grid-cols-3 gap-4">
-          <KpiCard value={stats.connexions_aujourdhui} label="Connexions aujourd'hui" />
-          <KpiCard value={stats.echecs_aujourdhui} label="Échecs aujourd'hui" tone="warn" />
-          <KpiCard value={stats.alertes_securite} label="Alertes sécurité" tone="danger" />
+          <KpiCard value={stats.connexions_aujourdhui} label="Connexions aujourd'hui" degrade="from-blue-500 to-indigo-600" />
+          <KpiCard value={stats.echecs_aujourdhui} label="Échecs aujourd'hui" degrade={stats.echecs_aujourdhui > 0 ? "from-amber-400 to-orange-500" : "from-emerald-400 to-teal-600"} />
+          <KpiCard value={stats.alertes_securite} label="Alertes sécurité" degrade={stats.alertes_securite > 0 ? "from-rose-500 to-red-600" : "from-emerald-400 to-teal-600"} />
         </div>
 
         <div className="grid grid-cols-2 gap-6">

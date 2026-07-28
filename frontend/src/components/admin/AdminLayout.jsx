@@ -4,6 +4,7 @@ import { useDispatch } from "react-redux";
 import { LogOut } from "lucide-react";
 import { logout } from "../../store/authSlice";
 import { ADMIN_NAV } from "../../utils/adminConstants";
+import AdminNotificationsBell from "./AdminNotificationsBell";
 
 
 export default function AdminLayout() {
@@ -75,7 +76,10 @@ export function AdminPageHeader({ title, subtitle, action }) {
         <h1 className="text-xl font-bold text-[#1E3A5F]">{title}</h1>
         {subtitle && <p className="text-sm text-slate-500 mt-0.5">{subtitle}</p>}
       </div>
-      {action}
+      <div className="flex items-center gap-3">
+        {action}
+        <AdminNotificationsBell />
+      </div>
     </div>
   );
 }
