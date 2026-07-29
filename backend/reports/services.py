@@ -84,3 +84,55 @@ def get_report_data(date_from=None, date_to=None, agent_id=None, priority=None, 
         'escalations': escalation_rows,
         'generated_at': timezone.now(),
     }
+def get_client_report_data(client, periode='mensuel'):
+    """
+    Données de rapport pour UN client, limitées à ses propres tickets.
+    periode: 'mensuel' | 'trimestriel' | 'annuel'
+    """
+    from datetime import timedelta
+
+    today = timezone.now().date()
+    if periode == 'annuel':
+        date_from = today.replace(month=1, day=1)
+    elif periode == 'trimestriel':
+        date_from = today - timedelta(days=90)
+    else:  # mensuel
+        date_from = today.replace(day=1)
+
+    qs = Ticket.objects.filter(client=client, created_at__date__gte=date_from)
+
+    total = qs.count()
+    resolved_qs = qs.filter(current_status__in=[Ticket.Status.RESOLVED, Ticket.Status.CLOSED])
+    resolved_total = resolved_qs.count()
+    sla_respected = resolved_qs.filter(is_sla_respected=True).count()
+    sla_compliance = round((sla_respected / resolved_total) * 100, 1) if resolved_total else 100
+
+    kpis = {
+        'total': total,
+        'open': qs.filter(current_status=Ticket.Status.OPEN).count(),
+        'in_progress': qs.filter(
+            current_status__in=[Ticket.Status.IN_PROGRESS, Ticket.Status.ASSIGNED]
+        ).count(),
+        'resolved': resolved_total,
+        'sla_compliance': sla_compliance,
+    }
+
+    ticket_rows = [
+        {
+            'ticket_number': t.ticket_number,
+            'title': t.title,
+            'status': t.current_status,
+            'priority': t.priority,
+            'created_at': t.created_at,
+            'sla_respected': 'Oui' if t.is_sla_respected else ('Non' if t.current_status in [Ticket.Status.RESOLVED, Ticket.Status.CLOSED] else '—'),
+        }
+        for t in qs.order_by('-created_at')
+    ]
+
+    return {
+        'kpis': kpis,
+        'tickets': ticket_rows,
+        'periode': periode,
+        'date_from': date_from,
+        'generated_at': timezone.now(),
+    }

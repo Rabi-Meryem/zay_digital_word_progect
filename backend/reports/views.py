@@ -1,5 +1,5 @@
 from django.shortcuts import render
-
+from .services import get_report_data, parse_date_param, get_client_report_data
 # Create your views here.
 import csv
 import io
@@ -228,3 +228,115 @@ class ReportListView(APIView):
     def get(self, request):
         reports = Report.objects.select_related('generated_by').order_by('-generated_at')[:50]
         return Response(ReportSerializer(reports, many=True, context={'request': request}).data)
+class GenerateClientReportView(APIView):
+    """
+    GET /api/reports/generate-client/?export_format=pdf|excel&periode=mensuel|trimestriel|annuel
+    Rapport limité aux tickets du client connecté (aucune donnée sur les autres agents/clients).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        fmt = request.GET.get('export_format', 'pdf').lower()
+        periode = request.GET.get('periode', 'mensuel')
+
+        data = get_client_report_data(request.user, periode=periode)
+
+        if fmt == 'excel':
+            return self._excel_response(data)
+        return self._pdf_response(data)
+
+    def _pdf_response(self, data):
+        import io
+        from django.http import HttpResponse
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib import colors
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4)
+        styles = getSampleStyleSheet()
+        elements = []
+
+        elements.append(Paragraph("Mon rapport — ZAY Digital World", styles['Title']))
+        elements.append(Paragraph(
+            f"Généré le {data['generated_at'].strftime('%d/%m/%Y %H:%M')} — période : {data['periode']}",
+            styles['Normal']
+        ))
+        elements.append(Spacer(1, 16))
+
+        elements.append(Paragraph("Synthèse", styles['Heading2']))
+        k = data['kpis']
+        kpi_table = Table([
+            ['Total', 'Ouverts', 'En cours', 'Résolus', 'Conformité SLA'],
+            [k['total'], k['open'], k['in_progress'], k['resolved'], f"{k['sla_compliance']}%"],
+        ])
+        kpi_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E3A5F')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ]))
+        elements.append(kpi_table)
+        elements.append(Spacer(1, 16))
+
+        elements.append(Paragraph("Mes tickets", styles['Heading2']))
+        ticket_data = [['Ticket', 'Titre', 'Statut', 'Priorité', 'SLA respecté']]
+        for t in data['tickets']:
+            ticket_data.append([
+                t['ticket_number'], t['title'][:40], t['status'], t['priority'], t['sla_respected'],
+            ])
+        ticket_table = Table(ticket_data)
+        ticket_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2D6A9F')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ]))
+        elements.append(ticket_table)
+
+        doc.build(elements)
+        buffer.seek(0)
+        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        response['Content-Disposition'] = 'attachment; filename="mon_rapport.pdf"'
+        return response
+
+    def _excel_response(self, data):
+        import io
+        from django.http import HttpResponse
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill
+
+        wb = Workbook()
+        header_fill = PatternFill(start_color='1E3A5F', end_color='1E3A5F', fill_type='solid')
+        header_font = Font(color='FFFFFF', bold=True)
+
+        ws1 = wb.active
+        ws1.title = 'Synthèse'
+        k = data['kpis']
+        ws1.append(['Total', 'Ouverts', 'En cours', 'Résolus', 'Conformité SLA (%)'])
+        for cell in ws1[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+        ws1.append([k['total'], k['open'], k['in_progress'], k['resolved'], k['sla_compliance']])
+
+        ws2 = wb.create_sheet('Mes tickets')
+        ws2.append(['Ticket', 'Titre', 'Statut', 'Priorité', 'Créé le', 'SLA respecté'])
+        for cell in ws2[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+        for t in data['tickets']:
+            ws2.append([
+                t['ticket_number'], t['title'], t['status'], t['priority'],
+                t['created_at'].strftime('%d/%m/%Y %H:%M'), t['sla_respected'],
+            ])
+
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = 'attachment; filename="mon_rapport.xlsx"'
+        return response

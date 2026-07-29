@@ -4,9 +4,10 @@ import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
   LayoutDashboard, ArrowUpCircle, AlarmClock, Users, FileText,
-  Bell, LogOut, Download, ArrowLeftRight, Clock, AlertTriangle,
+  LogOut, Download, ArrowLeftRight, Clock, AlertTriangle,
   CheckCircle2, User, X, Check,
 } from 'lucide-react'
+import NotificationBell from '../../components/dashboard/NotificationBell'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, PieChart, Pie, Cell,
@@ -231,15 +232,6 @@ function TopBar({ title, desc, children }) {
   )
 }
 
-function BellButton() {
-  return (
-    <button type="button" className="relative text-slate-500 hover:text-slate-700" aria-label="Notifications">
-      <Bell size={19} />
-      <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-danger" />
-    </button>
-  )
-}
-
 function Kpi({ label, value, warn }) {
   return (
     <div className="bg-white border border-slate-200 rounded-xl px-4 py-3">
@@ -323,7 +315,7 @@ function Overview() {
   return (
     <>
       <TopBar title="Vue d'ensemble" desc="Indicateurs de performance de la plateforme">
-        <BellButton />
+        <NotificationBell />
       </TopBar>
 
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-5">
@@ -482,7 +474,7 @@ function Escalations({ onReassign }) {
   return (
     <>
       <TopBar title="Escalades reçues" desc="Tickets transmis par les agents · à qualifier et affecter">
-        <BellButton />
+        <NotificationBell />
       </TopBar>
 
       <div className="flex gap-2 mb-4 flex-wrap">
@@ -677,7 +669,9 @@ function SlaSupervision({ onReassign }) {
 
   return (
     <>
-      <TopBar title="Supervision SLA" desc="Surveillance des délais en temps réel · tri par urgence"><BellButton /></TopBar>
+      <TopBar title="Supervision SLA" desc="Surveillance des délais en temps réel · tri par urgence">
+        <NotificationBell />
+      </TopBar>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
         <MiniStat Icon={AlertTriangle} tint={{ bg: 'rgba(192,57,43,.10)', fg: COLORS.danger }} value={kpis.slaBreached} valueColor={COLORS.danger} label="SLA dépassé" />
@@ -760,6 +754,7 @@ function Team() {
   return (
     <>
       <TopBar title="Performance de l'équipe" desc="Charge, délais et satisfaction par agent · 30 derniers jours">
+        <NotificationBell />
         <button
   type="button"
   onClick={async () => {
@@ -876,7 +871,7 @@ function Reports() {
   return (
     <>
      <TopBar title="Rapports & exports" desc="Générer un rapport de performance filtré au format PDF ou Excel">
-  <BellButton />
+  <NotificationBell />
 </TopBar>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 max-w-4xl">

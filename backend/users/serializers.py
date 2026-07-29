@@ -24,7 +24,7 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'first_name', 'last_name', 'email',
-            'phone', 'photo', 'is_active', 'role',
+            'phone', 'photo', 'is_active', 'role','plan',
             'created_at', 'last_login'
         ]
         read_only_fields = ['id', 'created_at', 'last_login']
@@ -50,9 +50,19 @@ class UserCreateSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'first_name', 'last_name', 'email',
-            'phone', 'password', 'role_id'
-        ]
- 
+            'phone', 'password', 'role_id', 'plan'
+       ]
+
+    def validate(self, attrs):
+        # Le plan n'a de sens que pour un client — évite une valeur
+        # incohérente sur un compte AGENT/SUPERVISOR/ADMIN.
+        role = attrs.get('role')
+        plan = attrs.get('plan')
+        if role and role.name != Role.RoleName.CLIENT and plan and plan != User._meta.get_field('plan').default:
+            raise serializers.ValidationError(
+                {"plan": "Le plan ne s'applique qu'aux comptes de type CLIENT."}
+            )
+        return attrs
     def create(self, validated_data):
         # set_password() hache le mot de passe avec PBKDF2 automatiquement
         # Ne jamais faire user.password = "..." en clair
@@ -63,6 +73,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
             last_name=validated_data['last_name'],
             phone=validated_data.get('phone', ''),
             role=validated_data['role'],
+            plan=validated_data.get('plan', User._meta.get_field('plan').default),
         )
         return user
  
@@ -79,7 +90,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
  
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'phone', 'is_active', 'role_id']
+        fields = ['first_name', 'last_name', 'phone', 'is_active', 'role_id', 'plan']
  
  
 # -----------------------------------------------------------------------
@@ -112,7 +123,7 @@ class UserListSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'full_name', 'first_name', 'last_name',
-            'email', 'phone', 'role', 'is_active',
+            'email', 'phone', 'role','plan','is_active',
             'status_label', 'created_at', 'last_login'
         ]
 

@@ -7,8 +7,8 @@
 // Répartition alignée sur la maquette Écran 2.1 : 2 Critiques, 3 Hautes,
 // 3 Moyennes, 12 Basses (les compteurs sont CALCULÉS depuis cette liste).
 // NB : "category" est illustratif en attendant le module Catégories (Écran 3.2).
+import { fakeSlaDeadline } from '../utils/mockSlaHelper'
 
-import { computeSlaDeadline } from '../utils/sla'
 
 const HOUR = 60 * 60 * 1000
 const MIN = 60 * 1000
@@ -47,7 +47,7 @@ function ticket({ createdAt, priority, ...rest }) {
     messages: [],
     priority,
     created_at: createdAt,
-    sla_deadline: computeSlaDeadline(createdAt, priority),
+    sla_deadline: fakeSlaDeadline(createdAt, priority),
     ...rest,
   }
 }
