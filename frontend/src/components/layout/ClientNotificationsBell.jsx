@@ -1,91 +1,65 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import toast from 'react-hot-toast'
-import { Bell, MessageSquare, Ticket, AlertTriangle, CheckCircle2, Check } from 'lucide-react'
-import { fetchNotifications, markNotificationRead, markAllRead as markAllReadApi } from '../../api/notifications'
+import { Bell, Check } from 'lucide-react'
+import {
+  fetchNotifications,
+  markNotificationRead,
+  markAllRead as apiMarkAllRead,
+} from '../../api/notifications'
 
-const TYPE_ICONS = {
-  TICKET_ASSIGNED: Ticket,
-  SLA_WARNING: AlertTriangle,
-  NEW_MESSAGE: MessageSquare,
-  TICKET_RESOLVED: CheckCircle2,
-  TICKET_CLOSED: CheckCircle2,
-}
+// Cloche de notifications du portail client — GET /api/notifications/
 
 function formatAgo(iso) {
   if (!iso) return ''
-
-  const minutes = Math.max(
-    0,
-    Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
-  )
-
-  if (minutes < 1) return "à l'instant"
+  const minutes = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000))
   if (minutes < 60) return `il y a ${minutes} min`
-
   const h = Math.floor(minutes / 60)
   if (h < 24) return `il y a ${h} h`
-
   return `il y a ${Math.floor(h / 24)} j`
 }
 
-function NotificationsPanel() {
+function ClientNotificationsBell({ variant = 'light' }) {
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState([])
-  const [unreadCount, setUnreadCount] = useState(0)
   const navigate = useNavigate()
 
-  const load = useCallback(() => {
+  useEffect(() => {
     fetchNotifications()
-      .then((data) => {
-        setItems(data.results ?? [])
-        setUnreadCount(data.unread_count ?? 0)
-      })
-      .catch(() => toast.error("Impossible de charger les notifications."))
+      .then((data) => setItems(data.results ?? data ?? []))
+      .catch(() => setItems([]))
   }, [])
 
-  useEffect(() => {
-    load()
-    const interval = setInterval(load, 30000) // Rafraîchit toutes les 30 s
-    return () => clearInterval(interval)
-  }, [load])
-
-  // Compatibilité avec différents formats de données
   const isRead = (n) => n.is_read ?? n.read ?? false
   const getText = (n) => n.message ?? n.text ?? n.title ?? ''
   const getDate = (n) => n.created_at ?? n.createdAt ?? null
   const getTicketId = (n) => n.ticket ?? n.ticket_id ?? n.ticketId ?? null
 
-  const openTicket = async (notification) => {
-    if (!notification.is_read) {
-      try {
-        await markNotificationRead(notification.id)
-        setItems((prev) =>
-          prev.map((n) =>
-            n.id === notification.id ? { ...n, is_read: true } : n
-          )
-        )
-        setUnreadCount((c) => Math.max(0, c - 1))
-      } catch {
-        // Pas bloquant pour la navigation
-      }
-    }
+  const unreadCount = items.filter((n) => !isRead(n)).length
+  const bellColor =
+    variant === 'dark' ? 'text-white/90 hover:text-white' : 'text-slate-500 hover:text-slate-700'
 
+  const openTicket = async (notification) => {
+    setItems((prev) =>
+      prev.map((n) => (n.id === notification.id ? { ...n, is_read: true, read: true } : n))
+    )
     setOpen(false)
 
-    const ticketId = getTicketId(notification)
-    if (ticketId) {
-      navigate(`/agent/tickets/${ticketId}`)
+    try {
+      await markNotificationRead(notification.id)
+    } catch {
+      // silencieux
     }
+
+    const ticketId = getTicketId(notification)
+    if (ticketId) navigate(`/tickets/${ticketId}`)
   }
 
   const handleMarkAllRead = async () => {
+    setItems((prev) => prev.map((n) => ({ ...n, is_read: true, read: true })))
     try {
-      await markAllReadApi()
-      setItems((prev) => prev.map((n) => ({ ...n, is_read: true })))
-      setUnreadCount(0)
+      await apiMarkAllRead()
     } catch {
-      toast.error("Échec du marquage global.")
+      // silencieux
     }
   }
 
@@ -94,7 +68,7 @@ function NotificationsPanel() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="relative text-slate-500 hover:text-slate-700"
+        className={`relative ${bellColor}`}
         aria-label={`Notifications${unreadCount ? ` (${unreadCount} non lues)` : ''}`}
         aria-expanded={open}
       >
@@ -127,58 +101,40 @@ function NotificationsPanel() {
               )}
             </div>
 
-
-            <ul className="max-h-80 overflow-y-auto divide-y divide-slate-50">
-              {items.length === 0 ? (
-                <li className="px-4 py-6 text-center text-sm text-slate-400">
-                  Aucune notification.
-                </li>
-              ) : (
-                items.map((n) => {
-                  const Icon = TYPE_ICONS[n.notification_type] ?? Bell
-
+            {items.length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-8">
+                Aucune notification pour le moment.
+              </p>
+            ) : (
+              <ul className="max-h-80 overflow-y-auto divide-y divide-slate-50">
+                {items.map((n) => {
+                  const lu = isRead(n)
                   return (
                     <li key={n.id}>
                       <button
                         type="button"
                         onClick={() => openTicket(n)}
                         className={`w-full flex items-start gap-2.5 px-4 py-3 text-left hover:bg-slate-50 ${
-
-                          n.is_read ? 'opacity-60' : ''
-
+                          lu ? 'opacity-60' : ''
                         }`}
                       >
-                        <span
-                          className={`mt-0.5 shrink-0 ${
-
-                            n.notification_type === 'SLA_WARNING' ? 'text-accent' : 'text-secondary'
-
-                          }`}
-                        >
-                          <Icon size={15} />
-                        </span>
                         <span className="min-w-0">
                           <span className="block text-sm text-slate-700 leading-snug">
-
-                            {n.title}
-                            {n.ticket_number ? ` — ${n.ticket_number}` : ''}
+                            {getText(n)}
                           </span>
                           <span className="block text-xs text-slate-400 mt-0.5">
-                            {formatAgo(n.created_at)}
+                            {formatAgo(getDate(n))}
                           </span>
                         </span>
-                        {!n.is_read && (
-
+                        {!lu && (
                           <span className="ml-auto mt-1.5 h-2 w-2 rounded-full bg-secondary shrink-0" />
                         )}
                       </button>
                     </li>
                   )
-
-                })
-              )}
-            </ul>
-
+                })}
+              </ul>
+            )}
           </div>
         </>
       )}
@@ -186,4 +142,4 @@ function NotificationsPanel() {
   )
 }
 
-export default NotificationsPanel
+export default ClientNotificationsBell

@@ -5,13 +5,10 @@ import toast from 'react-hot-toast'
 
 import PriorityBadge from '../components/tickets/PriorityBadge'
 import StatusBadge from '../components/tickets/StatusBadge'
+import LifecycleStepper from '../components/tickets/LifecycleStepper'
+import InterventionHistory from '../components/tickets/InterventionHistory'
 
-import {
-  fetchTicket,
-  fetchAttachments,
-  uploadAttachment,
-  rateTicket,
-} from '../api/tickets'
+import { fetchTicket, fetchAttachments, rateTicket } from '../api/tickets'
 
 const RESOLVED_STATUSES = ['RESOLVED', 'CLOSED']
 
@@ -21,18 +18,21 @@ function TicketDetailPage() {
 
   const [ticket, setTicket] = useState(null)
   const [loading, setLoading] = useState(true)
+
+  // Pièces jointes : lecture seule ici. L'ajout se fait uniquement à la
+  // création du ticket (NewTicketPage).
   const [attachments, setAttachments] = useState([])
 
-  // Partie messages (reste locale tant que le backend n'existe pas)
-  const [messages, setMessages] = useState([])
+  // Onglet actif : conversation (par défaut) ou suivi de la demande
+  const [onglet, setOnglet] = useState('conversation')
 
+  // Partie messages (reste locale tant que le backend messages_app n'existe pas)
+  const [messages, setMessages] = useState([])
   const [draft, setDraft] = useState('')
 
   const [rating, setRating] = useState(0)
   const [comment, setComment] = useState('')
   const [evaluationSent, setEvaluationSent] = useState(false)
-
-  const [uploading, setUploading] = useState(false)
 
   useEffect(() => {
     loadTicket()
@@ -89,43 +89,13 @@ function TicketDetailPage() {
 
     try {
       await rateTicket(ticket.id, rating, comment)
-
       toast.success('Évaluation enregistrée.')
-
       setEvaluationSent(true)
-
       loadTicket()
     } catch (error) {
       toast.error(
-        error.response?.data?.detail ||
-          "Impossible d'envoyer l'évaluation."
+        error.response?.data?.detail || "Impossible d'envoyer l'évaluation."
       )
-    }
-  }
-
-  const handleUpload = async (event) => {
-    const file = event.target.files[0]
-
-    if (!file) return
-
-    try {
-      setUploading(true)
-
-      await uploadAttachment(ticket.id, file)
-
-      toast.success('Pièce jointe envoyée.')
-
-      const attachmentData = await fetchAttachments(ticket.id)
-
-      setAttachments(attachmentData.attachments ?? [])
-    } catch (error) {
-      toast.error(
-        error.response?.data?.detail ||
-          "Impossible d'envoyer la pièce jointe."
-      )
-    } finally {
-      setUploading(false)
-      event.target.value = ''
     }
   }
 
@@ -141,7 +111,6 @@ function TicketDetailPage() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-slate-500">
         <p>Ticket introuvable.</p>
-
         <button
           type="button"
           onClick={() => navigate('/dashboard')}
@@ -179,8 +148,80 @@ function TicketDetailPage() {
         </div>
       </header>
 
-      <div className="flex-1 max-w-2xl w-full mx-auto p-4 space-y-3 overflow-y-auto">
-              {messages.length === 0 && (
+      {/* Onglets Conversation / Suivi de la demande */}
+      <div className="bg-white border-b border-slate-200 px-4">
+        <div className="max-w-2xl mx-auto flex gap-1">
+          {[
+            { cle: 'conversation', label: 'Conversation' },
+            { cle: 'suivi', label: 'Suivi de la demande' },
+          ].map((o) => (
+            <button
+              key={o.cle}
+              type="button"
+              onClick={() => setOnglet(o.cle)}
+              className={`text-sm px-3 py-2.5 border-b-2 transition-colors ${
+                onglet === o.cle
+                  ? 'border-primary text-primary font-medium'
+                  : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Onglet : Suivi de la demande */}
+      {onglet === 'suivi' && (
+        <div className="flex-1 max-w-2xl w-full mx-auto p-4 space-y-4 overflow-y-auto">
+          <LifecycleStepper ticket={ticket} />
+          <InterventionHistory ticketId={ticket.id} />
+
+          {/* Pièces jointes en lecture seule (ajoutées à la création du ticket) */}
+          {attachments.length > 0 && (
+            <div className="bg-white border border-slate-200 rounded-xl p-4">
+              <p className="text-sm font-medium text-slate-800 mb-3">
+                Pièces jointes
+              </p>
+
+              <div className="space-y-2">
+                {attachments.map((file) => (
+                  <div
+                    key={file.id}
+                    className="border rounded-lg p-3 flex justify-between items-center"
+                  >
+                    <div>
+                      <p className="text-sm font-medium">{file.original_name}</p>
+                      <p className="text-xs text-slate-500">
+                        {(file.file_size / 1024).toFixed(1)} Ko
+                      </p>
+                    </div>
+
+                    {file.file_url && (
+                      <a
+                        href={file.file_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-secondary text-sm hover:underline"
+                      >
+                        Télécharger
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Onglet : Conversation */}
+      <div
+        className={`flex-1 max-w-2xl w-full mx-auto p-4 space-y-3 overflow-y-auto ${
+          onglet === 'conversation' ? '' : 'hidden'
+        }`}
+      >
+        {messages.length === 0 && (
           <p className="text-center text-sm text-slate-400 py-6">
             Aucun message pour ce ticket.
           </p>
@@ -201,7 +242,6 @@ function TicketDetailPage() {
               }`}
             >
               {m.text}
-
               <p
                 className={`text-[10px] mt-1 ${
                   m.author === 'client'
@@ -218,63 +258,6 @@ function TicketDetailPage() {
           </div>
         ))}
 
-        {/* Pièces jointes */}
-
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-medium text-slate-800">
-              Pièces jointes
-            </p>
-
-            <label className="cursor-pointer text-sm bg-primary text-primary-foreground px-3 py-2 rounded-lg hover:bg-primary/90 transition">
-              {uploading ? 'Upload...' : 'Ajouter'}
-
-              <input
-                type="file"
-                className="hidden"
-                onChange={handleUpload}
-                disabled={uploading}
-              />
-            </label>
-          </div>
-
-          {attachments.length === 0 ? (
-            <p className="text-sm text-slate-400">
-              Aucune pièce jointe.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {attachments.map((file) => (
-                <div
-                  key={file.id}
-                  className="border rounded-lg p-3 flex justify-between items-center"
-                >
-                  <div>
-                    <p className="text-sm font-medium">
-                      {file.original_name}
-                    </p>
-
-                    <p className="text-xs text-slate-500">
-                      {(file.file_size / 1024).toFixed(1)} Ko
-                    </p>
-                  </div>
-
-                  {file.file_url && (
-                    <a
-                      href={file.file_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-secondary text-sm hover:underline"
-                    >
-                      Télécharger
-                    </a>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
         {isResolved && (
           <div className="bg-white border border-slate-200 rounded-xl p-4 mt-4">
             <p className="text-sm font-medium text-slate-800 mb-2">
@@ -289,17 +272,11 @@ function TicketDetailPage() {
               <>
                 <div className="flex gap-1 mb-2">
                   {[1, 2, 3, 4, 5].map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => setRating(n)}
-                    >
+                    <button key={n} type="button" onClick={() => setRating(n)}>
                       <Star
                         size={20}
                         className={
-                          n <= rating
-                            ? 'fill-accent text-accent'
-                            : 'text-slate-300'
+                          n <= rating ? 'fill-accent text-accent' : 'text-slate-300'
                         }
                       />
                     </button>
@@ -328,7 +305,7 @@ function TicketDetailPage() {
         )}
       </div>
 
-      {!isResolved && (
+      {!isResolved && onglet === 'conversation' && (
         <div className="border-t border-slate-200 bg-white p-3 flex items-center gap-2">
           <input
             type="text"
