@@ -6,7 +6,6 @@ import toast from 'react-hot-toast'
 import PriorityBadge from '../components/tickets/PriorityBadge'
 import StatusBadge from '../components/tickets/StatusBadge'
 import LifecycleStepper from '../components/tickets/LifecycleStepper'
-import InterventionHistory from '../components/tickets/InterventionHistory'
 
 import { fetchTicket, fetchAttachments, rateTicket } from '../api/tickets'
 
@@ -173,9 +172,8 @@ function TicketDetailPage() {
 
       {/* Onglet : Suivi de la demande */}
       {onglet === 'suivi' && (
-        <div className="flex-1 max-w-2xl w-full mx-auto p-4 space-y-4 overflow-y-auto">
+        <div className="flex-1 max-w-5xl w-full mx-auto p-6 space-y-4 overflow-y-auto">
           <LifecycleStepper ticket={ticket} />
-          <InterventionHistory ticketId={ticket.id} />
 
           {/* Pièces jointes en lecture seule (ajoutées à la création du ticket) */}
           {attachments.length > 0 && (
