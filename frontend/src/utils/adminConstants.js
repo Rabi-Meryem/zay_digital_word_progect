@@ -38,6 +38,7 @@ export const ADMIN_NAV = [
   { key: "escalations", label: "Escalades", to: "/admin/escalades" },
   { key: "ai", label: "Module IA", to: "/admin/ia" },
   { key: "notifications", label: "Notifications", to: "/admin/notifications" },
+  { key: "integrations", label: "Intégrations", to: "/admin/integrations" },
   { key: "audit", label: "Logs & Audit", to: "/admin/audit" },
   { key: "profil", label: "Mon profil", to: "/admin/profil" },
 ];

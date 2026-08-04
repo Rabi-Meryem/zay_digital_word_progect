@@ -21,6 +21,7 @@ import SupervisorAssignmentPage from './pages/supervisor/SupervisorAssignmentPag
 import SupervisorCriticalityPage from './pages/supervisor/SupervisorCriticalityPage'
 import SupervisorTeamPage from './pages/supervisor/SupervisorTeamPage'
 import SupervisorReportsPage from './pages/supervisor/SupervisorReportsPage'
+import SupervisorNewTicketPage from './pages/supervisor/SupervisorNewTicketPage'
 import SupervisorProfilePage from './pages/SupervisorProfilePage'
 import TicketDetailPage from './pages/TicketDetailPage'
 import ProtectedRoute from './routes/ProtectedRoute'
@@ -85,6 +86,7 @@ function App() {
         }
       >
         <Route path="dashboard" element={<SupervisorOverviewPage />} />
+        <Route path="tickets/nouveau" element={<SupervisorNewTicketPage />} />
         <Route path="escalades" element={<SupervisorEscalationsPage />} />
         <Route path="affectation" element={<SupervisorAssignmentPage />} />
         <Route path="criticite" element={<SupervisorCriticalityPage />} />
