@@ -3,7 +3,7 @@ import { Outlet, NavLink } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import {
   LayoutDashboard, ArrowUpCircle, ArrowLeftRight, Flame,
-  Users, FileText, User, LogOut,
+  Users, FileText, User, LogOut, PlusCircle,
 } from 'lucide-react'
 import { logout } from '../../store/authSlice'
 import { initialsFromName } from '../../utils/agentDisplay'
@@ -17,6 +17,7 @@ import { Avatar, COLORS } from '../supervisor/SupervisorUI'
 
 const NAV = [
   { to: '/supervisor/dashboard', label: "Vue d'ensemble", Icon: LayoutDashboard },
+  { to: '/supervisor/tickets/nouveau', label: 'Nouveau ticket', Icon: PlusCircle },
   { to: '/supervisor/escalades', label: 'Escalades', Icon: ArrowUpCircle },
   { to: '/supervisor/affectation', label: 'Affectation des tickets', Icon: ArrowLeftRight },
   { to: '/supervisor/criticite', label: 'Criticité des tickets', Icon: Flame },

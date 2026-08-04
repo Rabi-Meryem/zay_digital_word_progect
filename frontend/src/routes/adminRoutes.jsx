@@ -9,6 +9,7 @@ import AdminSlaPage from "../pages/admin/AdminSlaPage";
 import AdminEscalationsPage from "../pages/admin/AdminEscalationsPage";
 import AdminAiPage from "../pages/admin/AdminAiPage";
 import AdminNotificationsPage from "../pages/admin/AdminNotificationsPage";
+import AdminIntegrationsPage from "../pages/admin/AdminIntegrationsPage";
 import AdminAuditPage from "../pages/admin/AdminAuditPage";
 import AdminProfilePage from "../pages/AdminProfilePage";
 
@@ -20,6 +21,7 @@ export const adminRoutes = (
     <Route path="escalades" element={<AdminEscalationsPage />} />
     <Route path="ia" element={<AdminAiPage />} />
     <Route path="notifications" element={<AdminNotificationsPage />} />
+    <Route path="integrations" element={<AdminIntegrationsPage />} />
     <Route path="audit" element={<AdminAuditPage />} />
     <Route path="profil" element={<AdminProfilePage />} />
   </Route>
