@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Bell, Check } from 'lucide-react'
 import {
-  fetchNotifications,
   markNotificationRead,
   markAllRead as apiMarkAllRead,
 } from '../../api/notifications'
+import { useNotificationToasts } from '../../hooks/useNotificationToasts'
 
 // Cloche du portail administrateur — GET /api/notifications/
 // Même principe que les cloches client et agent.
@@ -20,19 +20,16 @@ function formatAgo(iso) {
 
 function AdminNotificationsBell() {
   const [open, setOpen] = useState(false)
+  const { unreadCount, items: liveItems } = useNotificationToasts()
   const [items, setItems] = useState([])
 
   useEffect(() => {
-    fetchNotifications()
-      .then((data) => setItems(data.results ?? data ?? []))
-      .catch(() => setItems([]))
-  }, [])
+    setItems(liveItems)
+  }, [liveItems])
 
   const isRead = (n) => n.is_read ?? n.read ?? false
   const getText = (n) => n.message ?? n.text ?? n.title ?? ''
   const getDate = (n) => n.created_at ?? n.createdAt ?? null
-
-  const unreadCount = items.filter((n) => !isRead(n)).length
 
   const markOne = async (notification) => {
     setItems((prev) =>

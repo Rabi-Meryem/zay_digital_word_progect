@@ -28,8 +28,18 @@ function SupervisorAssignmentPage() {
       .then(([tickets, k]) => {
         setRows(
           tickets
-            .map((t) => ({ ...t, info: getSlaInfo(t.createdAt, t.slaDeadline, t.priority) }))
-            .sort((a, b) => a.info.remainingMs - b.info.remainingMs)
+            .map((t) => ({
+              ...t,
+              info: t.priority ? getSlaInfo(t.createdAt, t.slaDeadline, t.priority) : null,
+            }))
+            .sort((a, b) => {
+              // Les tickets non classifiés (pas encore de deadline SLA
+              // pertinente) restent en fin de liste, après les urgences réelles.
+              if (!a.info && !b.info) return 0
+              if (!a.info) return 1
+              if (!b.info) return -1
+              return a.info.remainingMs - b.info.remainingMs
+            })
         )
         setKpis(k)
       })
@@ -126,7 +136,11 @@ function SupervisorAssignmentPage() {
                     </td>
                     <td className="px-4 py-3"><PriorityBadge priority={t.priority} /></td>
                     <td className="px-4 py-3">
-                      <SlaBar createdAt={t.createdAt} slaDeadline={t.slaDeadline} priority={t.priority} />
+                      {t.priority ? (
+                        <SlaBar createdAt={t.createdAt} slaDeadline={t.slaDeadline} priority={t.priority} />
+                      ) : (
+                        <span className="text-xs text-slate-400">En attente de classification</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5 justify-end">

@@ -138,6 +138,8 @@ class Ticket(models.Model):
 
     is_sla_respected = models.BooleanField(default=True)
 
+    sla_warning_sent = models.BooleanField(default=False)  
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     updated_at = models.DateTimeField(auto_now=True)

@@ -87,11 +87,16 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         source='role',
         required=False
     )
- 
+
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'phone', 'is_active', 'role_id', 'plan']
- 
+        fields = ['first_name', 'last_name', 'email', 'phone', 'is_active', 'role_id', 'plan']
+
+    def validate_email(self, value):
+        user = self.instance
+        if User.objects.exclude(pk=user.pk).filter(email=value).exists():
+            raise serializers.ValidationError("Cette adresse email est déjà utilisée.")
+        return value
  
 # -----------------------------------------------------------------------
 # Serializer pour réinitialiser le mot de passe (admin uniquement)
