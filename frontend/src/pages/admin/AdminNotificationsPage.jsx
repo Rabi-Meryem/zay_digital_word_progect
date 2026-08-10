@@ -86,19 +86,11 @@ export default function AdminNotificationsPage() {
           </div>
           <ul className="divide-y divide-slate-50">
             {history.map((h) => (
-              <li key={h.id} className="px-5 py-2.5 text-sm text-slate-600 flex justify-between items-center">
-                <div>
-                  <span className="font-mono text-slate-400 mr-2">
-                    {new Date(h.created_at).toLocaleString("fr-FR")}
-                  </span>
-                  {h.notification_title} → {h.recipient} ({h.channel_name})
-                  {h.status === "FAILED" && h.error_message && (
-                    <span className="text-red-500 text-xs ml-2">— {h.error_message}</span>
-                  )}
-                </div>
-                <span className={`px-2 py-0.5 rounded text-xs font-semibold shrink-0 ml-3 ${STATUS_BADGE[h.status]}`}>
-                  {h.status}
+              <li key={h.id} className="px-5 py-2.5 text-sm text-slate-600">
+                <span className="font-mono text-slate-400 mr-2">
+                  {new Date(h.created_at).toLocaleString("fr-FR")}
                 </span>
+                {h.notification_title} → {h.recipient} ({h.channel_name})
               </li>
             ))}
             {!history.length && <li className="px-5 py-8 text-center text-slate-400">Aucun envoi récent</li>}

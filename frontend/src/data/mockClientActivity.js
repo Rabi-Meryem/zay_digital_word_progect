@@ -1,41 +1,6 @@
 // ⚠️ DONNÉES FICTIVES — complète mockTickets.js pour le tableau de bord client.
-// Le backend expose déjà les modèles Ticket / TicketMessage : ces deux jeux de
-// données seront remplacés par GET /api/tickets/{id}/timeline/ et
-// GET /api/activities/ dès que les routes existeront.
-
-// Journal des interventions par ticket (clé = ticket.id de mockTickets.js).
-export const MOCK_INTERVENTIONS = {
-  1: [
-    { heure: '09:12', libelle: 'Ticket créé', type: 'client' },
-    { heure: '09:13', libelle: 'Classification automatique effectuée par l\'IA', type: 'ia' },
-  ],
-  46: [
-    { heure: '09:12', libelle: 'Ticket créé', type: 'client' },
-    { heure: '09:13', libelle: "Classification automatique : Critique (confiance 94 %)", type: 'ia' },
-    { heure: '09:18', libelle: 'Ticket pris en charge par Ahmed Karimi', type: 'agent' },
-    { heure: '09:42', libelle: "Analyse en cours — demande de la version applicative", type: 'agent' },
-    { heure: '10:02', libelle: 'Informations complémentaires transmises', type: 'client' },
-    { heure: '10:15', libelle: 'Solution proposée — mise à jour du fichier de configuration', type: 'agent' },
-    { heure: '10:40', libelle: 'Correctif appliqué — vérification en cours', type: 'agent' },
-  ],
-  48: [
-    { heure: '08:05', libelle: 'Ticket créé', type: 'client' },
-    { heure: '08:06', libelle: 'Classification automatique : Critique (confiance 87 %)', type: 'ia' },
-    { heure: '08:48', libelle: 'Ticket pris en charge par Ahmed Karimi', type: 'agent' },
-    { heure: '09:30', libelle: 'Escaladé au superviseur — droits administrateur requis', type: 'systeme' },
-  ],
-  43: [
-    { heure: '14:20', libelle: 'Ticket créé', type: 'client' },
-    { heure: '14:21', libelle: 'Classification automatique : Moyenne (confiance 91 %)', type: 'ia' },
-    { heure: '17:30', libelle: 'Ticket pris en charge par Fatima Rabi', type: 'agent' },
-    { heure: '17:45', libelle: "Demande d'informations complémentaires — copie de la facture", type: 'agent' },
-  ],
-  47: [
-    { heure: '11:00', libelle: 'Ticket créé', type: 'client' },
-    { heure: '11:01', libelle: 'Classification automatique : Haute (confiance 89 %)', type: 'ia' },
-    { heure: '11:20', libelle: 'Ticket pris en charge par Ahmed Karimi', type: 'agent' },
-  ],
-}
+// Le backend expose déjà les modèles Ticket / TicketMessage : ce jeu de données
+// sera remplacé par GET /api/activities/ dès que la route existera.
 
 // Activités récentes, tous tickets confondus (ligne 3 du dashboard).
 export const MOCK_ACTIVITES = [

@@ -1,13 +1,10 @@
 import { useState } from 'react'
 import { FileText, Sheet } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { downloadReport } from '../../api/reports'
+import { downloadClientReport } from '../../api/reports'
 
 // Ligne 4 (gauche) : export des rapports.
-//
-// ⚠️ L'export réel sera produit par le backend (GET /api/reports/?format=pdf&periode=...).
-// En attendant, le bouton simule l'appel et affiche un retour utilisateur : l'interface
-// est complète côté frontend, il ne restera qu'à brancher l'URL.
+// Branché sur GET /api/reports/generate-client/ (tickets du client connecté uniquement).
 
 const PERIODES = [
   { cle: 'mensuel', label: 'Rapport mensuel' },
@@ -19,19 +16,19 @@ function ReportExport() {
   const [periode, setPeriode] = useState('mensuel')
   const [enCours, setEnCours] = useState(null)
 
- const exporter = async (format) => {
-  setEnCours(format)
-  try {
-    const exportFormat = format === 'xlsx' ? 'excel' : format
-    await downloadReport(exportFormat, { periode })
-    const libelle = PERIODES.find((p) => p.cle === periode)?.label
-    toast.success(`${libelle} — export ${format.toUpperCase()} généré`)
-  } catch {
-    toast.error("Échec de l'export.")
-  } finally {
-    setEnCours(null)
+  const exporter = async (format) => {
+    setEnCours(format)
+    try {
+      const exportFormat = format === 'xlsx' ? 'excel' : format
+      await downloadClientReport(exportFormat, { periode })
+      const libelle = PERIODES.find((p) => p.cle === periode)?.label
+      toast.success(`${libelle} — export ${format.toUpperCase()} généré`)
+    } catch {
+      toast.error("Échec de l'export.")
+    } finally {
+      setEnCours(null)
+    }
   }
-}
 
   return (
     <div className="bg-white rounded-lg border border-slate-200 p-4">

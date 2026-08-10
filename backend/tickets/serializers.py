@@ -169,6 +169,7 @@ class TicketDetailSerializer(serializers.ModelSerializer):
                 'file_size':     a.file_size,
                 'mime_type':     a.mime_type,
                 'uploaded_at':   a.uploaded_at,
+                'file_url':      a.file.url,
             }
             for a in obj.attachments.all()
         ]

@@ -20,53 +20,36 @@ class TicketService:
 
     # ─────────────────────────────────────────────────────────────────────────
     # CRÉER UN TICKET
-    # Appelé par : TicketListCreateView.post()
     # ─────────────────────────────────────────────────────────────────────────
     @transaction.atomic
     def create_ticket(self, client, title, description, source='WEB'):
-        """
-        Crée un ticket complet :
-        1. Récupère la règle SLA selon le plan du client et la priorité
-        2. Calcule la deadline SLA
-        3. Crée le ticket en base
-        4. Crée l'entrée dans sla_history
-        5. Appelle le module IA pour prédire la priorité
-        6. Log l'action dans audit_logs
-        """
+        provisional_sla_rule = get_sla_rule(client.plan, Ticket.Priority.MEDIUM)
 
-        # Étape 1 — Récupérer la règle SLA par défaut (MEDIUM) selon le plan du client
-        sla_rule = get_sla_rule(client.plan, Ticket.Priority.MEDIUM)
-
-        if sla_rule is None:
+        if provisional_sla_rule is None:
             raise Exception(f"Aucune règle SLA MEDIUM active trouvée pour le plan {client.plan}.")
 
-        # Étape 2 — Calculer la deadline
         now = timezone.now()
-        sla_deadline = compute_sla_deadline(now, sla_rule)
+        sla_deadline = compute_sla_deadline(now, provisional_sla_rule)
 
-        # Étape 3 — Créer le ticket en base
         ticket = Ticket.objects.create(
             client         = client,
             title          = title,
             description    = description,
             source         = source,
-            priority       = Ticket.Priority.MEDIUM,
-            sla_rule       = sla_rule,
+            priority       = None,
+            sla_rule       = provisional_sla_rule,
             sla_deadline   = sla_deadline,
             current_status = Ticket.Status.OPEN,
         )
 
-        # Étape 4 — Historique SLA
         SLAHistory.objects.create(
             ticket    = ticket,
             sla_start = now,
             sla_end   = sla_deadline,
         )
 
-        # Étape 5 — Appeler le module IA pour prédire la priorité
         self._call_ai_prediction(ticket)
 
-        # Étape 6 — Logger l'action
         AuditLog.objects.create(
             user         = client,
             action_type  = AuditLog.ActionType.CREATE,
@@ -91,10 +74,6 @@ class TicketService:
     # CHANGER LE STATUT D'UN TICKET
     # ─────────────────────────────────────────────────────────────────────────
     def change_status(self, ticket, new_status, changed_by, reason=''):
-        """
-        Change le statut d'un ticket et enregistre
-        automatiquement dans ticket_status_history.
-        """
         old_status = ticket.current_status
 
         if old_status == new_status:
@@ -112,6 +91,7 @@ class TicketService:
             ticket.reopened_count += 1
             ticket.sla_deadline    = compute_sla_deadline(now, ticket.sla_rule)
             ticket.is_sla_respected = True
+            ticket.sla_warning_sent = False 
 
         ticket.current_status = new_status
         ticket.save()
@@ -126,16 +106,16 @@ class TicketService:
         )
 
         # Notifications (modules 5.2.3 à 5.2.6)
+        # Client + agent + superviseur, sans l'auteur de l'action.
+        recipients = self._status_change_recipients(ticket, changed_by)
         if new_status == Ticket.Status.RESOLVED:
-            notification_service.notify('TICKET_RESOLVED', ticket, recipients=[ticket.client])
+            notification_service.notify('TICKET_RESOLVED', ticket, recipients=recipients)
         elif new_status == Ticket.Status.CLOSED:
-            notification_service.notify('TICKET_CLOSED', ticket, recipients=[ticket.client])
+            notification_service.notify('TICKET_CLOSED', ticket, recipients=recipients)
         elif new_status == Ticket.Status.REOPENED:
-            recipients = [u for u in [ticket.assigned_agent, ticket.supervisor] if u]
-            if recipients:
-                notification_service.notify('TICKET_REOPENED', ticket, recipients=recipients)
+            notification_service.notify('TICKET_REOPENED', ticket, recipients=recipients)
         elif new_status not in (Ticket.Status.ASSIGNED, Ticket.Status.ESCALATED):
-            notification_service.notify('TICKET_STATUS_CHANGED', ticket, recipients=[ticket.client])
+            notification_service.notify('TICKET_STATUS_CHANGED', ticket, recipients=recipients)
 
         AuditLog.objects.create(
             user         = changed_by,
@@ -150,18 +130,19 @@ class TicketService:
 
         return ticket
 
+    def _status_change_recipients(self, ticket, changed_by):
+        """Client + agent assigné + superviseur, sans l'auteur de l'action."""
+        candidates = [ticket.client, ticket.assigned_agent, ticket.supervisor]
+        recipients = list({u.id: u for u in candidates if u is not None}.values())
+        if changed_by is not None:
+            recipients = [u for u in recipients if u.id != changed_by.id]
+        return recipients
+
     # ─────────────────────────────────────────────────────────────────────────
     # ASSIGNER UN TICKET À UN AGENT
     # ─────────────────────────────────────────────────────────────────────────
     @transaction.atomic
     def assign_ticket(self, ticket, agent, assigned_by):
-        """
-        Assigne un ticket à un agent :
-        1. Met à jour ticket.assigned_agent
-        2. Crée une entrée dans ticket_assignments
-        3. Change le statut vers ASSIGNED
-        4. Met à jour la disponibilité de l'agent
-        """
         from_agent = ticket.assigned_agent
 
         ticket.assigned_agent = agent
@@ -210,9 +191,6 @@ class TicketService:
     # ─────────────────────────────────────────────────────────────────────────
     @transaction.atomic
     def escalate_ticket(self, ticket, escalated_by, reason, escalation_type='MANUAL'):
-        """
-        Escalade un ticket vers le superviseur.
-        """
         supervisor = User.objects.filter(
             role__name='SUPERVISOR',
             is_active=True
@@ -246,20 +224,24 @@ class TicketService:
             ),
         )
 
-        # Notification (modules 5.4.3/5.4.4/6.3/6.4)
-        notification_service.notify(
-            'ESCALATION_CREATED', ticket, recipients=[supervisor],
-            override_content=f"Ticket {ticket.ticket_number} escaladé : {reason}",
-        )
+        # Notification (modules 5.4.3/5.4.4)
+        if escalation_type == 'MANUAL':
+            notification_service.notify(
+                'ESCALATION_MANUAL', ticket, recipients=[supervisor],
+                override_content=f"Ticket {ticket.ticket_number} escaladé : {reason}",
+            )
+        else:  # AUTO
+            recipients = [u for u in [ticket.assigned_agent, supervisor] if u]
+            notification_service.notify(
+                'ESCALATION_AUTO', ticket, recipients=recipients,
+                override_content=f"Ticket {ticket.ticket_number} escaladé automatiquement (SLA dépassé) : {reason}",
+            )
         return escalation
 
     # ─────────────────────────────────────────────────────────────────────────
     # ÉVALUER UN TICKET RÉSOLU
     # ─────────────────────────────────────────────────────────────────────────
     def rate_ticket(self, ticket, client, rating, comment=''):
-        """
-        Le client évalue la résolution de son ticket (1 à 5 étoiles).
-        """
         if ticket.current_status not in [Ticket.Status.RESOLVED, Ticket.Status.CLOSED]:
             raise Exception("Seul un ticket résolu ou clôturé peut être évalué.")
 
@@ -290,14 +272,9 @@ class TicketService:
         return ticket_rating
 
     # ─────────────────────────────────────────────────────────────────────────
-    # MÉTHODES PRIVÉES (internes au service)
+    # MÉTHODES PRIVÉES
     # ─────────────────────────────────────────────────────────────────────────
     def _call_ai_prediction(self, ticket):
-        """
-        Appelle le microservice IA pour prédire la priorité du ticket.
-        Si le service IA est indisponible, on ne bloque pas la création
-        du ticket (on continue avec la priorité saisie par le client).
-        """
         import requests
         from django.conf import settings
         import time
@@ -324,14 +301,9 @@ class TicketService:
                 ticket.save(update_fields=['ai_priority', 'ai_confidence'])
 
         except Exception:
-            # Si le service IA est indisponible, on continue sans lui
             pass
 
     def _update_agent_workload(self, agent):
-        """
-        Met à jour le compteur de tickets actifs de l'agent
-        dans la table agent_availability.
-        """
         from users.models import AgentAvailability
         active_tickets = Ticket.objects.filter(
             assigned_agent = agent,
@@ -347,7 +319,6 @@ class TicketService:
             defaults = {'workload': active_tickets}
         )
 
-        # Alerte surcharge (module 5.5.2)
         OVERLOAD_THRESHOLD = 15
         if active_tickets >= OVERLOAD_THRESHOLD:
             supervisors = list(User.objects.filter(role__name='SUPERVISOR', is_active=True))
@@ -363,14 +334,6 @@ class TicketService:
 
     @transaction.atomic
     def supervisor_set_priority_and_assign(self, ticket, priority, agent, supervisor):
-        """
-        Le superviseur fait deux choses en même temps :
-        1. Définit la priorité officielle du ticket
-        2. Assigne le ticket à un agent
-        3. Recalcule la deadline SLA selon la nouvelle priorité
-
-        Appelée par : TicketSetPriorityAndAssignView
-        """
         sla_rule = get_sla_rule(ticket.client.plan, priority)
         if sla_rule is None:
             raise Exception(f"Aucune règle SLA active pour la priorité {ticket.client.plan}/{priority}.")
@@ -381,6 +344,7 @@ class TicketService:
         ticket.sla_rule     = sla_rule
         ticket.sla_deadline = compute_sla_deadline(now, sla_rule)
         ticket.supervisor   = supervisor
+        ticket.sla_warning_sent = False 
         ticket.save(update_fields=['priority', 'sla_rule', 'sla_deadline', 'supervisor'])
 
         SLAHistory.objects.filter(ticket=ticket).update(sla_end=ticket.sla_deadline)
@@ -402,16 +366,6 @@ class TicketService:
 
     @transaction.atomic
     def ai_auto_process(self, ticket):
-        """
-        Déclenchée automatiquement si le superviseur n'a pas agi
-        dans les 45 minutes suivant la création du ticket.
-
-        1. L'IA analyse le titre + description et prédit la priorité
-        2. Recalcule le SLA selon cette priorité
-        3. Assigne à l'agent le moins chargé
-
-        Appelée par : TicketAIAutoAssignView (endpoint cron)
-        """
         import requests
         import time
         from django.conf import settings
@@ -449,6 +403,7 @@ class TicketService:
         ticket.priority      = predicted_priority
         ticket.ai_priority   = predicted_priority
         ticket.ai_confidence = confidence
+        ticket.sla_warning_sent = False
         ticket.sla_rule      = sla_rule
         ticket.sla_deadline  = compute_sla_deadline(now, sla_rule)
         ticket.save()
@@ -473,9 +428,6 @@ class TicketService:
         return ticket
 
     def _get_least_busy_agent(self):
-        """
-        Trouve l'agent actif avec le moins de tickets en cours.
-        """
         from users.models import AgentAvailability
         availability = AgentAvailability.objects.filter(
             agent__is_active=True,

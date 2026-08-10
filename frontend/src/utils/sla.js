@@ -1,32 +1,12 @@
-// Calcul du temps restant / pourcentage écoulé pour la barre de SLA.
-//
-// Barème (resolution_hours) illustratif — reproduit la logique du modèle réel
-// backend/sla/models/sla_rule.py (priority -> resolution_hours, warning_percentage),
-// à remplacer par les vraies valeurs une fois l'API SLA disponible.
-
+// utils/sla.js — version corrigée
 const HOUR_MS = 60 * 60 * 1000
-
-const SLA_RULES = {
-  // Aligné sur le CDC (module 6) et sur backend/users/management/commands/seed_data.py :
-  // Critique 2h, Haute 8h, Moyenne 24h, Basse 72h.
-  CRITICAL: { resolutionHours: 2, warningPercentage: 80 },
-  HIGH: { resolutionHours: 8, warningPercentage: 80 },
-  MEDIUM: { resolutionHours: 24, warningPercentage: 80 },
-  LOW: { resolutionHours: 72, warningPercentage: 80 },
-}
-
-export function computeSlaDeadline(createdAtIso, priority) {
-  const rule = SLA_RULES[priority] ?? SLA_RULES.MEDIUM
-  const created = new Date(createdAtIso).getTime()
-  return new Date(created + rule.resolutionHours * HOUR_MS).toISOString()
-}
 
 /**
  * Retourne { percentage, remainingMs, level, label } pour un ticket donné.
- * level : 'ok' | 'warning' | 'breached'
+ * warningPercentage vient du ticket (sla_rule.warning_percentage renvoyé par l'API),
+ * PAS d'une table locale — chaque plan/priorité a son propre seuil configuré par l'admin.
  */
-export function getSlaInfo(createdAtIso, slaDeadlineIso, priority) {
-  const rule = SLA_RULES[priority] ?? SLA_RULES.MEDIUM
+export function getSlaInfo(createdAtIso, slaDeadlineIso, warningPercentage = 80) {
   const now = Date.now()
   const start = new Date(createdAtIso).getTime()
   const end = new Date(slaDeadlineIso).getTime()
@@ -37,7 +17,7 @@ export function getSlaInfo(createdAtIso, slaDeadlineIso, priority) {
 
   let level = 'ok'
   if (remainingMs <= 0) level = 'breached'
-  else if (percentage >= rule.warningPercentage) level = 'warning'
+  else if (percentage >= warningPercentage) level = 'warning'
 
   return { percentage, remainingMs, level, label: formatRemaining(remainingMs) }
 }

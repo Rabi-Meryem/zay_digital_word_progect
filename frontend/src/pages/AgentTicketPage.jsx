@@ -11,18 +11,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { fetchTicket, resolveTicket, changeTicketStatus } from '../api/tickets'
 
 // Écran 2.2 — Fiche de traitement détaillée de l'incident (console agent).
-// ⚠️ Le changement de statut / la résolution / l'escalade ne modifient que
-// l'état LOCAL de la page (pas d'API tickets encore) — à brancher plus tard
-// sur PATCH /api/tickets/:id/ et POST /api/tickets/:id/escalate/.
-
-const PRIORITY_LABELS = { CRITICAL: 'Critique', HIGH: 'Haute', MEDIUM: 'Moyenne', LOW: 'Basse' }
-
-// Ordre logique du cycle de vie, pour savoir quelles étapes de la timeline
-// sont atteintes (WAITING/REOPENED sont des variantes de « en cours »).
-const STATUS_RANK = {
-  OPEN: 0, ASSIGNED: 1, IN_PROGRESS: 2, WAITING: 2, REOPENED: 2,
-  ESCALATED: 3, RESOLVED: 4, CLOSED: 5,
-}
 
 const STATUS_OPTIONS = [
   { value: 'IN_PROGRESS', label: 'En cours' },
@@ -30,7 +18,18 @@ const STATUS_OPTIONS = [
   { value: 'RESOLVED', label: 'Résolu' },
 ]
 
-const MIN = 60 * 1000
+// Libellé affiché dans la timeline pour chaque transition de statut réelle
+// (new_status vient de TicketStatusHistory, enregistré par le backend).
+const STATUS_HISTORY_LABELS = {
+  OPEN: 'Ticket ouvert',
+  ASSIGNED: 'Assigné à un agent',
+  IN_PROGRESS: 'Prise en charge',
+  WAITING: 'En attente du client',
+  ESCALATED: 'Escaladé au superviseur',
+  RESOLVED: 'Résolu',
+  CLOSED: 'Clôturé',
+  REOPENED: 'Réouvert par le client',
+}
 
 function fmtTime(iso) {
   return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
@@ -41,27 +40,22 @@ function fmtDateTime(iso) {
   return `${d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} · ${fmtTime(iso)}`
 }
 
-// Reconstruit la timeline (maquette : créé → IA → assigné → en cours → …)
-// à partir des champs du ticket et du statut courant.
-function buildTimeline(ticket, status) {
-  const created = new Date(ticket.created_at).getTime()
-  const rank = STATUS_RANK[status] ?? 0
-  const steps = [{ label: 'Ticket créé', at: new Date(created) }]
+// Construit la timeline à partir des VRAIES données du backend :
+// - "Ticket créé" à partir de ticket.created_at (toujours la 1ère étape)
+// - une entrée par transition réelle de ticket.status_history
+//   (déjà inclus dans la réponse de fetchTicket via TicketDetailSerializer)
+function buildTimeline(ticket) {
+  const steps = [{ label: 'Ticket créé', at: ticket.created_at, by: null, reason: null }]
 
-  if (ticket.ai_priority) {
-    const confidence = ticket.ai_confidence
-      ? ` (confiance ${Math.round(ticket.ai_confidence * 100)} %)`
-      : ''
+  const history = ticket.status_history ?? []
+  history.forEach((h) => {
     steps.push({
-      label: `IA : classifié ${PRIORITY_LABELS[ticket.ai_priority]}${confidence}`,
-      at: new Date(created + 1 * MIN),
+      label: STATUS_HISTORY_LABELS[h.new_status] ?? h.new_status,
+      at: h.changed_at,
+      by: h.changed_by,
+      reason: h.reason,
     })
-  }
-  if (rank >= 1) steps.push({ label: 'Assigné à Ahmed Karimi', at: new Date(created + 3 * MIN) })
-  if (rank >= 2) steps.push({ label: 'En cours de traitement', at: new Date(created + 30 * MIN) })
-  if (status === 'WAITING') steps.push({ label: 'En attente du client', at: new Date() })
-  if (status === 'ESCALATED') steps.push({ label: 'Escaladé au superviseur', at: new Date() })
-  if (rank >= 4) steps.push({ label: 'Résolu', at: new Date() })
+  })
 
   return steps
 }
@@ -76,38 +70,39 @@ function AgentTicketPage() {
   const [showEscalation, setShowEscalation] = useState(false)
 
   const timeline = useMemo(
-    () => (ticket ? buildTimeline(ticket, status) : []),
-    [ticket, status]
+    () => (ticket ? buildTimeline(ticket) : []),
+    [ticket]
   )
 
   useEffect(() => {
-  loadTicket()
-}, [ticketId])
+    loadTicket()
+  }, [ticketId])
 
-const loadTicket = async () => {
-  try {
-    setLoading(true)
+  const loadTicket = async () => {
+    try {
+      setLoading(true)
 
-    const data = await fetchTicket(ticketId)
+      const data = await fetchTicket(ticketId)
 
-    setTicket(data)
-    setStatus(data.current_status)
-  } catch (error) {
-    toast.error(
-      error.response?.data?.detail ||
-      "Impossible de charger le ticket."
-    )
-  } finally {
-    setLoading(false)
+      setTicket(data)
+      setStatus(data.current_status)
+    } catch (error) {
+      toast.error(
+        error.response?.data?.detail ||
+        "Impossible de charger le ticket."
+      )
+    } finally {
+      setLoading(false)
+    }
   }
-}
-if (loading) {
-  return (
-    <div className="min-h-screen flex items-center justify-center">
-      Chargement...
-    </div>
-  )
-}
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        Chargement...
+      </div>
+    )
+  }
 
   if (!ticket) {
     return (
@@ -132,27 +127,27 @@ if (loading) {
   const isLocked = isEscalated || isResolved
 
   const changeStatus = async (value) => {
-  if (value === 'ESCALATED') {
-    setShowEscalation(true)
-    return
+    if (value === 'ESCALATED') {
+      setShowEscalation(true)
+      return
+    }
+    try {
+      const updated = value === 'RESOLVED'
+        ? await resolveTicket(ticket.id)
+        : await changeTicketStatus(ticket.id, value)
+      setTicket(updated)
+      setStatus(updated.current_status)
+      toast.success(`Statut mis à jour : ${STATUS_OPTIONS.find((o) => o.value === value)?.label ?? value}`)
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Échec de la mise à jour du statut.")
+    }
   }
-  try {
-    const updated = value === 'RESOLVED'
-      ? await resolveTicket(ticket.id)
-      : await changeTicketStatus(ticket.id, value)
-    setTicket(updated)
-    setStatus(updated.current_status)
-    toast.success(`Statut mis à jour : ${STATUS_OPTIONS.find((o) => o.value === value)?.label ?? value}`)
-  } catch (error) {
-    toast.error(error?.response?.data?.detail || "Échec de la mise à jour du statut.")
-  }
-}
 
   const confirmEscalation = async ({ reasonLabel }) => {
-  setShowEscalation(false)
-  toast.success(`Ticket escaladé au superviseur — motif : ${reasonLabel}`)
-  await loadTicket()
-}
+    setShowEscalation(false)
+    toast.success(`Ticket escaladé au superviseur — motif : ${reasonLabel}`)
+    await loadTicket()
+  }
 
   return (
     <div className="bg-slate-50 min-h-full">
@@ -194,7 +189,7 @@ if (loading) {
                   </span>
                 </dd>
               </div>
-              
+
               <div>
                 <dt className="text-xs text-slate-400">Créé le</dt>
                 <dd className="font-medium text-slate-700 mt-0.5">
@@ -256,11 +251,17 @@ if (loading) {
               <p className="text-xs font-semibold tracking-wider text-slate-400 uppercase mb-3">
                 Suivi SLA
               </p>
-              <SlaBar
-                createdAt={ticket.created_at}
-                slaDeadline={ticket.sla_deadline}
-                priority={ticket.priority}
-              />
+              {ticket.priority ? (
+                <SlaBar
+                  createdAt={ticket.created_at}
+                  slaDeadline={ticket.sla_deadline}
+                  priority={ticket.priority}
+                />
+              ) : (
+                <p className="text-xs text-slate-400">
+                  En attente de classification par le superviseur ou l'IA.
+                </p>
+              )}
             </section>
           )}
 
@@ -272,7 +273,7 @@ if (loading) {
               {timeline.map((step, index) => {
                 const isLast = index === timeline.length - 1
                 return (
-                  <li key={step.label} className="flex items-start gap-2.5">
+                  <li key={`${step.label}-${step.at}`} className="flex items-start gap-2.5">
                     <span
                       className={`mt-1 h-2 w-2 rounded-full shrink-0 ${
                         isLast ? 'bg-accent' : 'bg-primary'
@@ -281,8 +282,12 @@ if (loading) {
                     <div>
                       <p className={`text-sm ${isLast ? 'text-accent font-medium' : 'text-slate-700'}`}>
                         {step.label}
+                        {step.by && <span className="text-slate-400 font-normal"> · {step.by}</span>}
                       </p>
                       <p className="text-xs text-slate-400">{fmtTime(step.at)}</p>
+                      {step.reason && (
+                        <p className="text-xs text-slate-400 italic mt-0.5">{step.reason}</p>
+                      )}
                     </div>
                   </li>
                 )

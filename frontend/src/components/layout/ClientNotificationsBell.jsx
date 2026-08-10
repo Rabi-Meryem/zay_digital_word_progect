@@ -1,29 +1,67 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, Check } from 'lucide-react'
+import {
+  fetchNotifications,
+  markNotificationRead,
+  markAllRead as apiMarkAllRead,
+} from '../../api/notifications'
 
-// Cloche de notifications temps réel du portail client.
-//
-// ⚠️ En attente de GET /api/notifications/ (+ WebSocket) côté backend.
-// Tant que cette route n'existe pas, la cloche reste vide plutôt que
-// d'afficher de fausses notifications pointant vers des tickets qui
-// n'existent pas réellement.
+// Cloche de notifications du portail client — GET /api/notifications/
+
+function formatAgo(iso) {
+  if (!iso) return ''
+  const minutes = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000))
+  if (minutes < 60) return `il y a ${minutes} min`
+  const h = Math.floor(minutes / 60)
+  if (h < 24) return `il y a ${h} h`
+  return `il y a ${Math.floor(h / 24)} j`
+}
 
 function ClientNotificationsBell({ variant = 'light' }) {
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState([])
   const navigate = useNavigate()
 
-  const unreadCount = items.filter((n) => !n.read).length
-  const bellColor = variant === 'dark' ? 'text-white/90 hover:text-white' : 'text-slate-500 hover:text-slate-700'
+  useEffect(() => {
+    fetchNotifications()
+      .then((data) => setItems(data.results ?? data ?? []))
+      .catch(() => setItems([]))
+  }, [])
 
-  const openTicket = (notification) => {
-    setItems((prev) => prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n)))
+  const isRead = (n) => n.is_read ?? n.read ?? false
+  const getText = (n) => n.message ?? n.text ?? n.title ?? ''
+  const getDate = (n) => n.created_at ?? n.createdAt ?? null
+  const getTicketId = (n) => n.ticket ?? n.ticket_id ?? n.ticketId ?? null
+
+  const unreadCount = items.filter((n) => !isRead(n)).length
+  const bellColor =
+    variant === 'dark' ? 'text-white/90 hover:text-white' : 'text-slate-500 hover:text-slate-700'
+
+  const openTicket = async (notification) => {
+    setItems((prev) =>
+      prev.map((n) => (n.id === notification.id ? { ...n, is_read: true, read: true } : n))
+    )
     setOpen(false)
-    navigate(`/tickets/${notification.ticketId}`)
+
+    try {
+      await markNotificationRead(notification.id)
+    } catch {
+      // silencieux
+    }
+
+    const ticketId = getTicketId(notification)
+    if (ticketId) navigate(`/tickets/${ticketId}`)
   }
 
-  const markAllRead = () => setItems((prev) => prev.map((n) => ({ ...n, read: true })))
+  const handleMarkAllRead = async () => {
+    setItems((prev) => prev.map((n) => ({ ...n, is_read: true, read: true })))
+    try {
+      await apiMarkAllRead()
+    } catch {
+      // silencieux
+    }
+  }
 
   return (
     <div className="relative">
@@ -54,7 +92,7 @@ function ClientNotificationsBell({ variant = 'light' }) {
               {unreadCount > 0 && (
                 <button
                   type="button"
-                  onClick={markAllRead}
+                  onClick={handleMarkAllRead}
                   className="flex items-center gap-1 text-xs text-secondary hover:underline"
                 >
                   <Check size={13} />
@@ -64,25 +102,37 @@ function ClientNotificationsBell({ variant = 'light' }) {
             </div>
 
             {items.length === 0 ? (
-              <p className="text-xs text-slate-400 text-center py-8">Aucune notification pour le moment.</p>
+              <p className="text-xs text-slate-400 text-center py-8">
+                Aucune notification pour le moment.
+              </p>
             ) : (
               <ul className="max-h-80 overflow-y-auto divide-y divide-slate-50">
-                {items.map((n) => (
-                  <li key={n.id}>
-                    <button
-                      type="button"
-                      onClick={() => openTicket(n)}
-                      className={`w-full flex items-start gap-2.5 px-4 py-3 text-left hover:bg-slate-50 ${
-                        n.read ? 'opacity-60' : ''
-                      }`}
-                    >
-                      <span className="min-w-0">
-                        <span className="block text-sm text-slate-700 leading-snug">{n.text}</span>
-                      </span>
-                      {!n.read && <span className="ml-auto mt-1.5 h-2 w-2 rounded-full bg-secondary shrink-0" />}
-                    </button>
-                  </li>
-                ))}
+                {items.map((n) => {
+                  const lu = isRead(n)
+                  return (
+                    <li key={n.id}>
+                      <button
+                        type="button"
+                        onClick={() => openTicket(n)}
+                        className={`w-full flex items-start gap-2.5 px-4 py-3 text-left hover:bg-slate-50 ${
+                          lu ? 'opacity-60' : ''
+                        }`}
+                      >
+                        <span className="min-w-0">
+                          <span className="block text-sm text-slate-700 leading-snug">
+                            {getText(n)}
+                          </span>
+                          <span className="block text-xs text-slate-400 mt-0.5">
+                            {formatAgo(getDate(n))}
+                          </span>
+                        </span>
+                        {!lu && (
+                          <span className="ml-auto mt-1.5 h-2 w-2 rounded-full bg-secondary shrink-0" />
+                        )}
+                      </button>
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </div>

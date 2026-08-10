@@ -2,13 +2,19 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { MailCheck, X } from 'lucide-react'
+import { MailCheck, X, Loader2 } from 'lucide-react'
+import { requestPasswordReset, ROUTE_ABSENTE } from '../../api/passwordResetService'
 
 // « Mot de passe oublié ? » — Écran 1.1.
-// ⚠️ Le backend n'expose pas encore de réinitialisation en libre-service
-// (seul l'admin peut réinitialiser via POST /api/users/:id/reset-password/).
-// Ce formulaire valide l'email et simule l'envoi : il suffira de brancher
-// l'appel API (ex: POST /api/auth/password-reset/) dans onSubmit le moment venu.
+//
+// Parcours métier : le client, l'agent ou le superviseur saisit son adresse ;
+// la demande est transmise à l'administrateur, qui réinitialise le mot de passe
+// depuis l'écran 3.2 (Gestion des utilisateurs). L'administrateur est donc le
+// seul à pouvoir fixer un nouveau mot de passe — c'est ce que le backend
+// autorise aujourd'hui (POST /api/users/<id>/reset-password/, IsAdminRole).
+//
+// Le message affiché reste volontairement neutre : on ne révèle jamais si un
+// compte existe pour une adresse donnée.
 
 const schema = z.object({
   email: z
@@ -19,6 +25,8 @@ const schema = z.object({
 
 function ForgotPasswordModal({ onClose }) {
   const [sent, setSent] = useState(false)
+  const [envoi, setEnvoi] = useState(false)
+  const [routeAbsente, setRouteAbsente] = useState(false)
 
   const {
     register,
@@ -27,9 +35,29 @@ function ForgotPasswordModal({ onClose }) {
     formState: { errors },
   } = useForm({ resolver: zodResolver(schema) })
 
-  // Message volontairement neutre : on ne révèle jamais si un compte existe
-  // ou non pour une adresse donnée (bonne pratique de sécurité).
-  const onSubmit = () => setSent(true)
+  const onSubmit = async (values) => {
+    setEnvoi(true)
+    try {
+      const res = await requestPasswordReset(values.email)
+      if (!res.transmis && res.raison === ROUTE_ABSENTE) {
+        setRouteAbsente(true)
+        if (import.meta.env.DEV) {
+          console.warn(
+            '[ZAY] POST /api/auth/password-reset-request/ absente — appliquer le patch backend ' +
+              '(backend_patch/users/views_password_request.py + 1 ligne dans users/urls.py).'
+          )
+        }
+      }
+    } catch {
+      // Erreur réseau ou serveur : on n'en dit pas plus à l'utilisateur.
+      if (import.meta.env.DEV) {
+        console.warn('[ZAY] Demande de réinitialisation : erreur serveur.')
+      }
+    } finally {
+      setEnvoi(false)
+      setSent(true) // message neutre dans tous les cas
+    }
+  }
 
   return (
     <div
@@ -51,7 +79,7 @@ function ForgotPasswordModal({ onClose }) {
             <h2 className="font-semibold text-slate-800">Réinitialiser le mot de passe</h2>
             {!sent && (
               <p className="text-xs text-slate-500 mt-0.5">
-                Saisis l'adresse email de ton compte.
+                Saisis l&apos;adresse email de ton compte.
               </p>
             )}
           </div>
@@ -71,13 +99,17 @@ function ForgotPasswordModal({ onClose }) {
               <MailCheck size={20} />
             </span>
             <p className="text-sm text-slate-700 leading-relaxed">
-              Si un compte existe avec l'adresse{' '}
-              <span className="font-medium">{getValues('email')}</span>, un lien de
-              réinitialisation vient d'être envoyé.
+              Si un compte existe avec l&apos;adresse{' '}
+              <span className="font-medium">{getValues('email')}</span>, ta demande a été transmise à
+              l&apos;administrateur. Il te communiquera un nouveau mot de passe.
             </p>
-            <p className="text-xs text-slate-400 mt-2">
-              Pense à vérifier le dossier spam. (Simulation — en attente de l'API.)
-            </p>
+            {routeAbsente && import.meta.env.DEV && (
+              <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2 mt-3 text-left">
+                Développement : la route{' '}
+                <span className="font-mono">/api/auth/password-reset-request/</span> n&apos;existe pas
+                encore côté backend — appliquer le patch fourni.
+              </p>
+            )}
             <button
               type="button"
               onClick={onClose}
@@ -110,6 +142,11 @@ function ForgotPasswordModal({ onClose }) {
               )}
             </div>
 
+            <p className="text-[11px] text-slate-400 leading-snug">
+              La réinitialisation est effectuée par l&apos;administrateur : ta demande lui est
+              transmise et enregistrée dans le journal d&apos;audit.
+            </p>
+
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -120,9 +157,11 @@ function ForgotPasswordModal({ onClose }) {
               </button>
               <button
                 type="submit"
-                className="flex-1 text-sm font-medium bg-primary text-primary-foreground rounded-lg py-2 hover:bg-primary/90 transition"
+                disabled={envoi}
+                className="flex-1 flex items-center justify-center gap-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg py-2 hover:bg-primary/90 transition disabled:opacity-50"
               >
-                Envoyer le lien
+                {envoi && <Loader2 size={14} className="animate-spin" />}
+                {envoi ? 'Envoi…' : 'Envoyer ma demande'}
               </button>
             </div>
           </form>
