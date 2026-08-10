@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Flame, Check, X, MessageSquare } from 'lucide-react'
+import { Flame, Check, X, FileText } from 'lucide-react'
 import PriorityBadge from '../../components/tickets/PriorityBadge'
 import { fetchSlaTickets, fetchAgents } from '../../api/supervisor'
 import { setPriorityAndAssign } from '../../api/tickets'
@@ -217,7 +217,7 @@ function SupervisorCriticalityPage() {
                             aria-label="Voir les échanges"
                             title="Voir les échanges client / agent"
                           >
-                            <MessageSquare size={15} />
+                            <FileText size={15} />
                           </button>
                         )}
                         <button

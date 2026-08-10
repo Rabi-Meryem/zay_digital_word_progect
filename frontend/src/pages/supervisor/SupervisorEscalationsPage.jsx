@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
-import { ArrowLeftRight, User, MessageSquare } from 'lucide-react'
+import { ArrowLeftRight, User, FileText } from 'lucide-react'
 import PriorityBadge from '../../components/tickets/PriorityBadge'
 import StatusBadge from '../../components/tickets/StatusBadge'
 import SlaBar from '../../components/tickets/SlaBar'
@@ -14,27 +14,32 @@ import TicketThreadModal from '../../components/supervisor/TicketThreadModal'
 import { TopBar, Avatar } from '../../components/supervisor/SupervisorUI'
 
 function SupervisorEscalationsPage() {
-  const [filter, setFilter] = useState('all')
-  const [list, setList] = useState([])
+ const [filter, setFilter] = useState('all')
+  const [all, setAll] = useState([])
   const [loading, setLoading] = useState(true)
   const [reassign, setReassign] = useState(null)
   const [thread, setThread] = useState(null)
 
   const load = () => {
     setLoading(true)
-    fetchEscalations(filter)
-      .then(setList)
+    fetchEscalations('all')
+      .then(setAll)
       .catch(() => toast.error("Impossible de charger les escalades."))
       .finally(() => setLoading(false))
   }
 
-  useEffect(load, [filter])
+  useEffect(load, [])
 
-  const nPending = list.filter((e) => !e.resolved).length
-  const nTaken = list.filter((e) => e.resolved).length
+  const nPending = all.filter((e) => !e.resolved).length
+  const nTaken = all.filter((e) => e.resolved).length
+
+  const list =
+    filter === 'pending' ? all.filter((e) => !e.resolved)
+      : filter === 'taken' ? all.filter((e) => e.resolved)
+        : all
 
   const CHIPS = [
-    { key: 'all', label: `Toutes (${list.length})` },
+    { key: 'all', label: `Toutes (${all.length})` },
     { key: 'pending', label: `En attente (${nPending})` },
     { key: 'taken', label: `Prises en charge (${nTaken})` },
   ]
@@ -167,7 +172,7 @@ function SupervisorEscalationsPage() {
                     onClick={() => setThread(e.ticket_id)}
                     className="flex items-center gap-1.5 text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50"
                   >
-                    <MessageSquare size={14} /> Ouvrir la fiche
+                    <FileText size={14} /> Ouvrir la fiche
                   </button>
                 )}
               </div>
