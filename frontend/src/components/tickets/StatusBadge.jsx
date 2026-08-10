@@ -1,4 +1,4 @@
-const STATUS_STYLES = {
+export const STATUS_STYLES = {
   OPEN: { label: 'Ouvert', className: 'bg-slate-100 text-slate-600' },
   ASSIGNED: { label: 'Affecté', className: 'bg-secondary/10 text-secondary' },
   IN_PROGRESS: { label: 'En cours', className: 'bg-secondary/10 text-secondary' },
@@ -7,6 +7,11 @@ const STATUS_STYLES = {
   RESOLVED: { label: 'Résolu', className: 'bg-success/10 text-success' },
   CLOSED: { label: 'Clôturé', className: 'bg-slate-100 text-slate-500' },
   REOPENED: { label: 'Réouvert', className: 'bg-accent/10 text-accent' },
+}
+
+// Libellé français d'un statut, identique à celui affiché à l'agent.
+export function statusLabel(status) {
+  return STATUS_STYLES[status]?.label ?? status
 }
 
 function StatusBadge({ status }) {

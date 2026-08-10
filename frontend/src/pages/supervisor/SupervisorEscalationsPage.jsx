@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
-import { ArrowLeftRight, User, MessageSquare } from 'lucide-react'
+import { ArrowLeftRight, User, FileText } from 'lucide-react'
 import PriorityBadge from '../../components/tickets/PriorityBadge'
 import StatusBadge from '../../components/tickets/StatusBadge'
 import SlaBar from '../../components/tickets/SlaBar'
@@ -172,7 +172,7 @@ function SupervisorEscalationsPage() {
                     onClick={() => setThread(e.ticket_id)}
                     className="flex items-center gap-1.5 text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg px-3 py-2 hover:bg-slate-50"
                   >
-                    <MessageSquare size={14} /> Ouvrir la fiche
+                    <FileText size={14} /> Ouvrir la fiche
                   </button>
                 )}
               </div>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
-import { AlertTriangle, CheckCircle2, MessageSquare } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, FileText } from 'lucide-react'
 import PriorityBadge from '../../components/tickets/PriorityBadge'
 import SlaBar from '../../components/tickets/SlaBar'
 import { getSlaInfo } from '../../utils/sla'
@@ -138,7 +138,7 @@ function SupervisorAssignmentPage() {
                             aria-label="Voir les échanges"
                             title="Voir les échanges client / agent"
                           >
-                            <MessageSquare size={15} />
+                            <FileText size={15} />
                           </button>
                         )}
                         <button

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { X, User } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PriorityBadge from '../tickets/PriorityBadge'
-import StatusBadge from '../tickets/StatusBadge'
+import StatusBadge, { statusLabel } from '../tickets/StatusBadge'
 import { fetchTicket } from '../../api/tickets'
 
 // Consultation d'un ticket par le superviseur : détail, historique des
@@ -117,7 +117,7 @@ function TicketThreadModal({ ticketId, onClose }) {
                       <span className="w-1.5 h-1.5 rounded-full bg-secondary mt-1.5 shrink-0" aria-hidden="true" />
                       <span className="min-w-0">
                         <span className="block text-slate-700">
-                          {h.old_status} → {h.new_status}
+                          {statusLabel(h.old_status)} → {statusLabel(h.new_status)}
                           {h.changed_by ? ` · ${h.changed_by}` : ''}
                         </span>
                         {h.reason && <span className="block text-slate-500 italic">{h.reason}</span>}
