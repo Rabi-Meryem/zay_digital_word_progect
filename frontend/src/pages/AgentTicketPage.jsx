@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
-  ArrowLeft, MessageSquare, CheckCircle2, ArrowUpRight, Paperclip,
+  ArrowLeft, CheckCircle2, ArrowUpRight, Paperclip,
 } from 'lucide-react'
 import PriorityBadge from '../components/tickets/PriorityBadge'
 import StatusBadge from '../components/tickets/StatusBadge'
@@ -327,19 +327,9 @@ if (loading) {
               Actions
             </p>
             <div className="space-y-2">
-              <button
-                type="button"
-                disabled={isLocked}
-                onClick={() => navigate(`/agent/tickets/${ticket.id}/messages`)}
-                className="w-full flex items-center justify-center gap-2 text-sm text-slate-700 border border-slate-200 rounded-lg py-2 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <MessageSquare size={15} />
-                Messagerie client
-                {ticket.unread_messages ? ` (${ticket.unread_messages})` : ''}
-              </button>
               {isEscalated && (
-                <p className="text-[11px] text-slate-400 -mt-1">
-                  Ticket escaladé : la messagerie et la résolution sont désormais gérées par le superviseur.
+                <p className="text-[11px] text-slate-400 mb-1">
+                  Ticket escaladé : la résolution est désormais gérée par le superviseur.
                 </p>
               )}
 

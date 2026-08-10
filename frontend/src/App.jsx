@@ -10,8 +10,6 @@ import ClientProfilePage from './pages/ClientProfilePage'
 import AgentLayout from './components/layout/AgentLayout'
 import AgentDashboardPage from './pages/AgentDashboardPage'
 import AgentTicketPage from './pages/AgentTicketPage'
-import AgentChatPage from './pages/AgentChatPage'
-import AgentMessagesPage from './pages/AgentMessagesPage'
 import AgentProfilePage from './pages/AgentProfilePage'
 import AgentStatsPage from './pages/AgentStatsPage'
 import SupervisorDashboardPage from './pages/supervisor/SupervisorDashboardPage'
@@ -62,8 +60,6 @@ function App() {
       >
         <Route path="dashboard" element={<AgentDashboardPage />} />
         <Route path="tickets/:ticketId" element={<AgentTicketPage />} />
-        <Route path="tickets/:ticketId/messages" element={<AgentChatPage />} />
-        <Route path="messages" element={<AgentMessagesPage />} />
         <Route path="profil" element={<AgentProfilePage />} />
         <Route path="stats" element={<AgentStatsPage />} />
       </Route>

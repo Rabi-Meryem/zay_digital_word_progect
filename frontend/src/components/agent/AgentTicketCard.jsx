@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { MessageSquare, ArrowUpRight, ChevronRight } from 'lucide-react'
+import { ArrowUpRight, ChevronRight } from 'lucide-react'
 import PriorityBadge from '../tickets/PriorityBadge'
 import StatusBadge from '../tickets/StatusBadge'
 import SlaBar from '../tickets/SlaBar'
 import EscalationModal from './EscalationModal'
 
 // Carte d'un ticket assigné à l'agent — maquette Écran 2.1.
-// « Traiter » ouvre la fiche (Écran 2.2), « Messages » le chat (Écran 2.3),
+// « Traiter » ouvre la fiche (Écran 2.2),
 // « Escalader » la fenêtre d'escalade (Écran 2.4).
 
 // L'escalade n'est proposée que sur les priorités où elle a du sens
@@ -50,14 +50,6 @@ function AgentTicketCard({ ticket }) {
       </div>
 
       <div className="flex items-center gap-2 mt-3 flex-wrap">
-        <button
-          type="button"
-          onClick={() => navigate(`/agent/tickets/${ticket.id}/messages`)}
-          className="flex items-center gap-1.5 text-xs text-slate-600 border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-50"
-        >
-          <MessageSquare size={13} />
-          Messages{ticket.unread_messages ? ` (${ticket.unread_messages})` : ' (0)'}
-        </button>
 
         {ESCALATABLE.includes(ticket.priority) && (
           <button

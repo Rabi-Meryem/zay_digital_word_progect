@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Outlet, NavLink } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
-import { Ticket, MessageSquare, LineChart, User, LogOut } from 'lucide-react'
+import { Ticket, LineChart, User, LogOut } from 'lucide-react'
 import { logout } from '../../store/authSlice'
 import { fetchTickets } from '../../api/tickets'
 
@@ -9,14 +9,11 @@ import { fetchTickets } from '../../api/tickets'
 // en desktop), le contenu change à droite via <Outlet />.
 //
 // Les badges sont calculés depuis les vrais tickets assignés à l'agent.
-// ⚠️ Le compteur de messages non lus reste à 0 tant que GET /api/messages/
-// n'existe pas côté backend.
 
 const RESOLVED_STATUSES = ['RESOLVED', 'CLOSED']
 
 const NAV = [
   { to: '/agent/dashboard', label: 'Mes tickets', icon: Ticket },
-  { to: '/agent/messages', label: 'Messages', icon: MessageSquare },
   { to: '/agent/stats', label: 'Mon évolution', icon: LineChart },
   { to: '/agent/profil', label: 'Mon profil', icon: User },
 ]

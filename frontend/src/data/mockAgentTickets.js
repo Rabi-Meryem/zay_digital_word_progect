@@ -37,7 +37,6 @@ const KARIM = { id: 13, first_name: 'Karim', last_name: 'Said', company: 'Cabine
 
 function ticket({ createdAt, priority, ...rest }) {
   return {
-    unread_messages: 0,
     current_status: 'ASSIGNED',
     category: 'Divers',
     description: '',
@@ -71,7 +70,6 @@ const URGENT_TICKETS = [
     ai_confidence: 0.97,
     category: 'Infrastructure',
     current_status: 'IN_PROGRESS',
-    unread_messages: 1,
     description:
       "Depuis 10h, le serveur de production ne répond plus (timeout sur toutes les requêtes). " +
       "Les équipes ne peuvent plus travailler. Le redémarrage à distance a échoué.",
@@ -93,7 +91,6 @@ const URGENT_TICKETS = [
     ai_confidence: 0.94,
     category: 'Bug système',
     current_status: 'IN_PROGRESS',
-    unread_messages: 2,
     description:
       "Depuis ce matin 9h, mon application de gestion plante au démarrage. " +
       'Message : "Cannot connect to server". Redémarrage PC sans succès.',
@@ -124,7 +121,6 @@ const URGENT_TICKETS = [
     ai_confidence: 0.91,
     category: 'Bug système',
     current_status: 'IN_PROGRESS',
-    unread_messages: 1,
     description:
       "L'export PDF des rapports mensuels renvoie une erreur 500 depuis la mise à jour. " +
       "L'export Excel fonctionne normalement.",
@@ -189,7 +185,6 @@ const URGENT_TICKETS = [
     ai_confidence: 0.93,
     category: 'Facturation',
     current_status: 'WAITING',
-    unread_messages: 1,
     description:
       "Le montant de la facture de mars ne correspond pas au devis validé (écart de 480 MAD).",
     createdAt: T43_CREATED,
