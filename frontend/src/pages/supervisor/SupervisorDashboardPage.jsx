@@ -557,18 +557,8 @@ function Escalations({ onReassign }) {
   )
 }
 
-/* ════════════════ MODALE — FICHE ESCALADE & MESSAGES ════════════════ */
+/* ════════════════ MODALE — FICHE ESCALADE ════════════════ */
 function EscalationDetailModal({ escalation, onClose }) {
-  const [messages, setMessages] = useState(escalation.messages ?? [])
-  const [draft, setDraft] = useState('')
-
-  // TODO API : POST /api/tickets/{escalation.id}/messages/
-  const send = () => {
-    if (!draft.trim()) return
-    setMessages((prev) => [...prev, { id: Date.now(), author: 'Vous', text: draft.trim(), time: "à l'instant" }])
-    setDraft('')
-  }
-
   return (
     <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" onClick={onClose}>
       <div
@@ -603,39 +593,8 @@ function EscalationDetailModal({ escalation, onClose }) {
             « {escalation.context} »
           </p>
 
-          <div>
-            <p className="text-sm font-semibold text-slate-700 mb-2">Messages</p>
-            {messages.length === 0 ? (
-              <p className="text-sm text-slate-400">Aucun message pour ce ticket.</p>
-            ) : (
-              <div className="space-y-2">
-                {messages.map((m) => (
-                  <div
-                    key={m.id}
-                    className={`text-sm rounded-lg px-3 py-2 max-w-[85%] ${
-                      m.author === 'Vous' ? 'ml-auto bg-primary text-white' : 'bg-slate-100 text-slate-700'
-                    }`}
-                  >
-                    {m.text}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
 
-        <div className="flex gap-2 px-5 py-3 border-t border-slate-100">
-          <input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && send()}
-            placeholder="Écrire un message... (Entrée pour envoyer)"
-            className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/40"
-          />
-          <button type="button" onClick={send} className="bg-primary text-white rounded-lg px-3 py-2 hover:bg-primary/90" aria-label="Envoyer">
-            <Send size={16} />
-          </button>
-        </div>
       </div>
     </div>
   )

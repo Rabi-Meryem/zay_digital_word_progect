@@ -5,13 +5,8 @@ import PriorityBadge from '../tickets/PriorityBadge'
 import StatusBadge, { statusLabel } from '../tickets/StatusBadge'
 import { fetchTicket } from '../../api/tickets'
 
-// Consultation d'un ticket par le superviseur : détail, historique des
-// changements de statut, et échanges client / agent.
-//
-// ⚠️ GET /api/tickets/{id}/ renvoie `status_history` mais AUCUN champ
-// `messages`, et aucune route d'envoi de message n'est exposée par le
-// backend. Les échanges restent donc vides tant que la route n'existe pas.
-// TODO backend : exposer les messages du ticket (lecture + envoi).
+// Consultation d'un ticket par le superviseur : informations du ticket et
+// historique des changements de statut.
 
 function fmtDate(iso) {
   if (!iso) return ''
@@ -30,8 +25,6 @@ function TicketThreadModal({ ticketId, onClose }) {
       .catch(() => toast.error('Impossible de charger le ticket.'))
       .finally(() => setLoading(false))
   }, [ticketId])
-
-  const messages = ticket?.messages ?? []
 
   return (
     <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50" onClick={onClose}>
@@ -80,31 +73,6 @@ function TicketThreadModal({ ticketId, onClose }) {
                 {ticket.description}
               </p>
             )}
-
-            <div>
-              <p className="text-sm font-semibold text-slate-700 mb-2">Échanges client / agent</p>
-              {messages.length === 0 ? (
-                <p className="text-sm text-slate-400">
-                  Aucun message disponible pour ce ticket.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {messages.map((m) => (
-                    <div
-                      key={m.id}
-                      className={`text-sm rounded-lg px-3 py-2 max-w-[85%] ${
-                        m.author === 'AGENT' ? 'ml-auto bg-secondary/10 text-slate-700' : 'bg-slate-100 text-slate-700'
-                      }`}
-                    >
-                      <span className="block text-[11px] text-slate-400 mb-0.5">
-                        {m.author === 'AGENT' ? 'Agent' : 'Client'}
-                      </span>
-                      {m.text}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
 
             <div>
               <p className="text-sm font-semibold text-slate-700 mb-2">Historique des statuts</p>
