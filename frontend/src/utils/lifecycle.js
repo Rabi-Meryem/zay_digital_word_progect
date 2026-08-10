@@ -1,14 +1,16 @@
 // Cycle de vie d'un ticket, tel qu'il est présenté au client.
 //
-// Les 7 étapes sont déduites de current_status : le backend n'a pas besoin
-// d'exposer une étape explicite, elle se dérive des champs existants.
+// Seules 4 étapes sont visibles côté client : Créé, Pris en charge, Résolu,
+// Fermé. Les statuts internes (Affecté, En attente, Escaladé) sont réservés
+// à l'agent/superviseur et sont donc absorbés dans "Pris en charge" ici.
+//
+// La réouverture n'est pas une étape de la timeline : elle peut survenir
+// après "Fermé", donc elle est exposée à part (flag `reouvert`) pour être
+// affichée comme un badge/bandeau distinct par le composant.
 
 export const ETAPES = [
   { cle: 'cree', label: 'Ticket créé' },
   { cle: 'pris_en_charge', label: 'Pris en charge' },
-  { cle: 'analyse', label: 'Analyse en cours' },
-  { cle: 'solution', label: 'Solution en préparation' },
-  { cle: 'validation', label: 'Validation interne' },
   { cle: 'resolu', label: 'Résolu' },
   { cle: 'ferme', label: 'Fermé' },
 ]
@@ -19,26 +21,25 @@ function indexCourant(ticket) {
     case 'OPEN':
       return 0
     case 'ASSIGNED':
-      return 1
     case 'IN_PROGRESS':
-      return 2
     case 'WAITING':
-      return 3
     case 'ESCALATED':
-      return 4
-    case 'REOPENED':
-      return 2
+      return 1
     case 'RESOLVED':
-      return 5
+      return 2
     case 'CLOSED':
-      return 6
+      return 3
+    // Un ticket réouvert repart en traitement : on revient visuellement
+    // sur "Pris en charge", le flag `reouvert` signale l'événement à part.
+    case 'REOPENED':
+      return 1
     default:
       return 0
   }
 }
 
 /**
- * Retourne les 7 étapes enrichies :
+ * Retourne les 4 étapes enrichies :
  *   etat : 'faite' | 'courante' | 'a_venir'
  *   date : horodatage si connu
  */
@@ -57,6 +58,16 @@ export function etapesDuTicket(ticket = {}) {
     etat: i < courant ? 'faite' : i === courant ? 'courante' : 'a_venir',
     date: dates[etape.cle] || null,
   }))
+}
+
+/** Le ticket a-t-il été réouvert ? Utile pour afficher un badge séparé. */
+export function estReouvert(ticket = {}) {
+  return ticket.current_status === 'REOPENED'
+}
+
+/** Date de réouverture, si connue (à adapter au champ réel du backend). */
+export function dateReouverture(ticket = {}) {
+  return ticket.reopened_at ?? null
 }
 
 /** Progression en pourcentage, pour la barre du stepper. */

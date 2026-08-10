@@ -5,7 +5,6 @@ import { z } from 'zod'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { ArrowLeft, Paperclip, X, Send, Sparkles } from 'lucide-react'
-import { BLOCS } from '../data/modules'
 import { createTicket } from '../api/tickets'
 
 // Écran de création d'un ticket (/tickets/nouveau).
@@ -26,7 +25,6 @@ const ticketSchema = z.object({
     .string()
     .min(5, 'Le titre doit faire au moins 5 caractères.')
     .max(255, 'Le titre ne peut pas dépasser 255 caractères.'),
-  module_concerne: z.string().min(1, 'Sélectionne le module concerné.'),
   description: z
     .string()
     .min(30, 'Décris le problème en 30 caractères minimum pour permettre une analyse fiable.'),
@@ -75,12 +73,11 @@ function NewTicketPage() {
   const onSubmit = async (values) => {
     setEnvoi(true)
     try {
-      const ticket = await createTicket({
-        title: values.title,
-        description: values.description,
-        module_concerne: values.module_concerne,
-        files: fichiers,
-      })
+     const ticket = await createTicket({
+  title: values.title,
+  description: values.description,
+  files: fichiers,
+})
 
       if (ticket.attachments_rejected?.length) {
         ticket.attachments_rejected.forEach((r) =>
@@ -92,12 +89,11 @@ function NewTicketPage() {
       navigate(`/tickets/${ticket.id}`)
     } catch (error) {
       toast.error(
-        error.response?.data?.detail ||
-        error.response?.data?.title?.[0] ||
-        error.response?.data?.module_concerne?.[0] ||
-        error.response?.data?.description?.[0] ||
-        "Impossible de créer le ticket."
-      )
+  error.response?.data?.detail ||
+  error.response?.data?.title?.[0] ||
+  error.response?.data?.description?.[0] ||
+  "Impossible de créer le ticket."
+)
     } finally {
       setEnvoi(false)
     }
@@ -138,37 +134,6 @@ function NewTicketPage() {
               {errors.title && <p className="text-xs text-danger mt-1">{errors.title.message}</p>}
             </div>
 
-            {/* Module concerné */}
-            <div className="bg-white rounded-lg border border-slate-200 p-4">
-              <label htmlFor="module_concerne" className="block text-sm font-medium text-slate-700 mb-1">
-                Module concerné
-              </label>
-              <select
-                id="module_concerne"
-                {...register('module_concerne')}
-                defaultValue=""
-                className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-secondary/40"
-              >
-                <option value="" disabled>
-                  Sélectionner un module…
-                </option>
-                {BLOCS.map((bloc) => (
-                  <optgroup key={bloc.cle} label={bloc.label}>
-                    {bloc.modules.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-              {errors.module_concerne && (
-                <p className="text-xs text-danger mt-1">{errors.module_concerne.message}</p>
-              )}
-              <p className="text-[11px] text-slate-400 mt-1.5">
-                Le module permet d'orienter ta demande vers l'agent référent du bloc fonctionnel.
-              </p>
-            </div>
 
             {/* Description */}
             <div className="bg-white rounded-lg border border-slate-200 p-4">

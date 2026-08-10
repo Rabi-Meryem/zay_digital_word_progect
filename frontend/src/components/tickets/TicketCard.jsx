@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { FileText, ChevronRight, Star } from 'lucide-react'
-import StatusBadge from './StatusBadge'
+import ClientStatusBadge from './ClientStatusBadge'
 import PriorityBadge from './PriorityBadge'
 import SlaBar from './SlaBar'
 
@@ -28,19 +28,18 @@ function TicketCard({ ticket }) {
           <h3 className="font-medium text-slate-800 mt-0.5 truncate">{ticket.title}</h3>
           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
             <PriorityBadge priority={ticket.priority} />
-            {ticket.assigned_agent && (
-              <span className="text-xs text-slate-500">
-                {ticket.assigned_agent.first_name} {ticket.assigned_agent.last_name}
-              </span>
-            )}
           </div>
         </div>
-        <StatusBadge status={ticket.current_status} />
+        <ClientStatusBadge status={ticket.current_status} />
       </div>
 
       {!isResolved && (
         <div className="mt-3">
-          <SlaBar createdAt={ticket.created_at} slaDeadline={ticket.sla_deadline} priority={ticket.priority} />
+          {ticket.priority ? (
+            <SlaBar createdAt={ticket.created_at} slaDeadline={ticket.sla_deadline} priority={ticket.priority} />
+          ) : (
+            <p className="text-xs text-slate-400">SLA : en attente de classification</p>
+          )}
         </div>
       )}
 

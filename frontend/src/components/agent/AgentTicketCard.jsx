@@ -42,11 +42,11 @@ function AgentTicketCard({ ticket }) {
       </div>
 
       <div className="mt-3">
-        <SlaBar
-          createdAt={ticket.created_at}
-          slaDeadline={ticket.sla_deadline}
-          priority={ticket.priority}
-        />
+        {ticket.priority ? (
+          <SlaBar createdAt={ticket.created_at} slaDeadline={ticket.sla_deadline} priority={ticket.priority} />
+        ) : (
+          <p className="text-xs text-slate-400">SLA : en attente de classification</p>
+        )}
       </div>
 
       <div className="flex items-center gap-2 mt-3 flex-wrap">

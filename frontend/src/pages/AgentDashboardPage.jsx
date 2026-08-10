@@ -42,6 +42,16 @@ function AgentDashboardPage() {
     [tickets]
   )
 
+  // Tickets résolus/clôturés : gardés visibles côté agent, triés du plus
+  // récemment résolu au plus ancien.
+  const resolvedTickets = useMemo(
+    () =>
+      tickets
+        .filter((t) => RESOLVED_STATUSES.includes(t.current_status))
+        .sort((a, b) => new Date(b.resolved_at ?? b.updated_at) - new Date(a.resolved_at ?? a.updated_at)),
+    [tickets]
+  )
+
   const countsByPriority = useMemo(() => {
     const counts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 }
     activeTickets.forEach((t) => { counts[t.priority] += 1 })
@@ -96,6 +106,19 @@ function AgentDashboardPage() {
         <p className="text-center text-xs text-slate-400 pt-1 pb-6">
           + {countsByPriority.LOW} tickets Basse priorité hors file urgente
         </p>
+      )}
+
+      {resolvedTickets.length > 0 && (
+        <>
+          <p className="text-xs font-semibold tracking-wider text-slate-400 uppercase mb-3 mt-4">
+            Tickets résolus ({resolvedTickets.length})
+          </p>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 pb-6">
+            {resolvedTickets.map((ticket) => (
+              <AgentTicketCard key={ticket.id} ticket={ticket} />
+            ))}
+          </div>
+        </>
       )}
     </main>
   )

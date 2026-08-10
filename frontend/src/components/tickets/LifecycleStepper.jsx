@@ -1,10 +1,14 @@
-import { Check } from 'lucide-react'
-import { etapesDuTicket } from '../../utils/lifecycle'
+import { Check, RotateCcw } from 'lucide-react'
+import { etapesDuTicket, estReouvert, dateReouverture } from '../../utils/lifecycle'
 
 // Suivi en temps réel du cycle de vie du ticket, affiché sur /tickets/:id.
+
 // Créé → Pris en charge → Analyse → Solution → Validation → Résolu → Fermé
 //
 // Deux rendus : vertical sur mobile/tablette, horizontal à partir de lg.
+
+// Créé → Pris en charge → Résolu → Fermé (+ bandeau si réouvert)
+
 
 function formatDate(iso) {
   if (!iso) return null
@@ -35,6 +39,7 @@ function Pastille({ faite, courante }) {
 
 function LifecycleStepper({ ticket = {} }) {
   const etapes = etapesDuTicket(ticket)
+  const reouvert = estReouvert(ticket)
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-6 lg:px-10 lg:py-8">
@@ -130,6 +135,16 @@ function LifecycleStepper({ ticket = {} }) {
           )
         })}
       </ol>
+
+      {reouvert && (
+        <div className="mt-3 flex items-center gap-2 bg-accent/10 text-accent text-xs font-medium rounded-lg px-3 py-2">
+          <RotateCcw size={13} />
+          <span>
+            Ticket réouvert
+            {dateReouverture(ticket) && ` le ${formatDate(dateReouverture(ticket))}`}
+          </span>
+        </div>
+      )}
     </div>
   )
 }

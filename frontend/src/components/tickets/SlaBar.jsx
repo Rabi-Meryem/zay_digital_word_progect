@@ -6,8 +6,8 @@ const LEVEL_COLORS = {
   breached: 'bg-danger',
 }
 
-function SlaBar({ createdAt, slaDeadline, priority }) {
-  const { percentage, label, level } = getSlaInfo(createdAt, slaDeadline, priority)
+function SlaBar({ createdAt, slaDeadline, warningPercentage = 80 }) {
+  const { percentage, label, level } = getSlaInfo(createdAt, slaDeadline, warningPercentage)
 
   return (
     <div>
