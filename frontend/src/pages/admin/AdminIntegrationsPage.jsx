@@ -2,19 +2,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Écran 3.3 — « Configuration des Protocoles, Intégrations API & Logs d'Audit »
 // Portail ADMIN. Reprend la maquette du dossier UI/UX :
-//   1. Intégrations système  : SMTP (envoi) · IMAP (réception) · API REST
-//   2. Webhooks configurés
-//   3. Logs système & audit de sécurité
+//   1. Intégrations système  : SMTP (envoi) · IMAP (réception)
+//   2. Logs système & audit de sécurité
 //
 // Ce que fait réellement chaque bloc côté serveur :
 //   • SMTP  → GET/PATCH /api/integrations/smtp/   (SMTPConfiguration)   ✅ réel
 //   • IMAP  → GET/PATCH /api/integrations/imap/   (IMAPConfiguration)   ✅ réel
 //   • Tests → POST /api/integrations/{smtp,imap}/test/   ⚠️ patch backend requis
 //   • Logs  → GET /api/logs/ (AuditLog + filtres django-filter)         ✅ réel
-//   • API REST / Webhooks → AUCUN modèle backend à ce jour : les deux
-//     panneaux sont affichés en lecture seule et signalés comme non branchés
-//     (cf. la note « À faire côté backend » en bas de page). On ne simule pas
-//     une persistance qui n'existe pas.
 //
 // Rappel du fonctionnement métier (cahier des charges) :
 //   SMTP — l'admin écrit un message depuis le portail ; le backend le remet au
@@ -24,10 +19,10 @@
 //   ce qui évite à l'admin et au superviseur d'ouvrir leur boîte mail.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import {
-  Send, Inbox, KeyRound, Webhook, ShieldAlert, Loader2,
-  CheckCircle2, XCircle, Download, RefreshCw, Info,
+  Send, Inbox, ShieldAlert, Loader2,
+  CheckCircle2, XCircle, Download, RefreshCw,
 } from 'lucide-react'
 import { AdminPageHeader } from '../../components/admin/AdminLayout'
 import { toast } from '../../components/admin/toast'
@@ -103,15 +98,6 @@ function Selecteur({ label, options, ...props }) {
   )
 }
 
-function NoteBackend({ children }) {
-  return (
-    <div className="flex gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-      <Info size={13} className="text-amber-600 shrink-0 mt-0.5" />
-      <p className="text-[11px] text-amber-800 leading-snug">{children}</p>
-    </div>
-  )
-}
-
 // ── Écran ───────────────────────────────────────────────────────────────────
 
 export default function AdminIntegrationsPage() {
@@ -128,7 +114,16 @@ export default function AdminIntegrationsPage() {
   const [logs, setLogs] = useState([])
   const [ongletLog, setOngletLog] = useState('ALL')
   const [rechercheLog, setRechercheLog] = useState('')
-  const [chargementLogs, setChargementLogs] = useState(true)
+  const [rechercheAppliquee, setRechercheAppliquee] = useState('')
+  // Premier chargement uniquement : au changement d'onglet on garde les lignes
+  // précédentes à l'écran pour éviter que le bloc ne se replie et fasse sauter
+  // le défilement de la page.
+  const [logsInitialises, setLogsInitialises] = useState(false)
+  const [rafraichissementLogs, setRafraichissementLogs] = useState(true)
+
+  // Identifiant de la dernière requête logs émise : une réponse arrivée en
+  // retard (onglet déjà changé entre-temps) est ignorée.
+  const requeteLogs = useRef(0)
 
   const occupe = (cle, valeur) => setEnCours((e) => ({ ...e, [cle]: valeur }))
 
@@ -151,21 +146,36 @@ export default function AdminIntegrationsPage() {
     })
   }, [])
 
-  // ── Chargement des logs (debounce sur la recherche) ───────────────────────
+  // ── Chargement des logs ───────────────────────────────────────────────────
+  // Le debounce ne porte que sur la saisie de recherche ; un clic sur un onglet
+  // déclenche la requête immédiatement.
+  useEffect(() => {
+    const t = setTimeout(() => setRechercheAppliquee(rechercheLog), 300)
+    return () => clearTimeout(t)
+  }, [rechercheLog])
+
   const chargerLogs = useCallback(() => {
     const onglet = ONGLETS_LOGS.find((o) => o.cle === ongletLog) ?? ONGLETS_LOGS[0]
-    setChargementLogs(true)
+    const idRequete = ++requeteLogs.current
+    setRafraichissementLogs(true)
     logsApi
-      .list({ ...onglet.params, search: rechercheLog || undefined, page_size: 100 })
-      .then((res) => setLogs(res.data.results ?? []))
-      .catch(() => setLogs([]))
-      .finally(() => setChargementLogs(false))
-  }, [ongletLog, rechercheLog])
+      .list({ ...onglet.params, search: rechercheAppliquee || undefined, page_size: 100 })
+      .then((res) => {
+        if (idRequete !== requeteLogs.current) return   // réponse périmée
+        setLogs(res.data.results ?? [])
+      })
+      .catch(() => {
+        if (idRequete !== requeteLogs.current) return
+        setLogs([])
+      })
+      .finally(() => {
+        if (idRequete !== requeteLogs.current) return
+        setLogsInitialises(true)
+        setRafraichissementLogs(false)
+      })
+  }, [ongletLog, rechercheAppliquee])
 
-  useEffect(() => {
-    const t = setTimeout(chargerLogs, 300)
-    return () => clearTimeout(t)
-  }, [chargerLogs])
+  useEffect(() => { chargerLogs() }, [chargerLogs])
 
   // ── Actions SMTP ──────────────────────────────────────────────────────────
   const enregistrerSmtp = async () => {
@@ -286,7 +296,7 @@ export default function AdminIntegrationsPage() {
         <section>
           <h2 className="text-sm font-semibold text-slate-700 mb-3">Intégrations système</h2>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* SMTP */}
             <Carte titre="SMTP — Envoi" Icone={Send} actif={smtp.enabled}>
               <Champ
@@ -475,59 +485,17 @@ export default function AdminIntegrationsPage() {
               </div>
             </Carte>
 
-            {/* API REST — panneau documentaire, non branché */}
-            <Carte titre="API REST" Icone={KeyRound} actif={false}>
-              <NoteBackend>
-                Aucun modèle <span className="font-mono">APIKey</span> n&apos;existe côté backend :
-                ce panneau est présenté en lecture seule tant que la table et les routes ne sont pas
-                créées. Rien n&apos;est simulé ni enregistré.
-              </NoteBackend>
-
-              <div>
-                <label className="block text-[11px] font-medium text-slate-500 mb-1">Clé API active</label>
-                <div className="border border-slate-200 bg-slate-50 rounded-lg px-3 py-2 text-sm text-slate-400 font-mono">
-                  — non exposée —
-                </div>
-              </div>
-
-              <div className="text-[11px] text-slate-500 space-y-1.5 pt-1">
-                <p className="font-medium text-slate-600">Routes d&apos;intégration disponibles :</p>
-                <p className="font-mono text-slate-400">GET/PATCH /api/integrations/smtp/</p>
-                <p className="font-mono text-slate-400">GET/PATCH /api/integrations/imap/</p>
-                <p className="font-mono text-slate-400">POST /api/integrations/imap/poll/</p>
-                <p className="pt-1">
-                  L&apos;endpoint de relève est protégé par l&apos;en-tête
-                  <span className="font-mono"> X-Cron-Secret</span> et non par une clé API.
-                </p>
-              </div>
-            </Carte>
           </div>
         </section>
 
-        {/* ── 2. Webhooks ─────────────────────────────────────────────────── */}
-        <section>
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-3">
-            <Webhook size={15} /> Webhooks configurés
-          </h2>
-          <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
-            <NoteBackend>
-              Fonctionnalité prévue à la maquette mais absente du backend : aucun modèle
-              <span className="font-mono"> Webhook</span> ni route associée. Le panneau reste
-              volontairement vide plutôt que d&apos;afficher des données factices. À créer côté
-              backend : modèle (événement, URL, actif) + routes CRUD admin.
-            </NoteBackend>
-            <p className="text-xs text-slate-400">
-              Événements à couvrir une fois le modèle créé : ticket critique créé, SLA dépassé,
-              ticket escaladé.
-            </p>
-          </div>
-        </section>
-
-        {/* ── 3. Logs & audit ─────────────────────────────────────────────── */}
+        {/* ── 2. Logs & audit ─────────────────────────────────────────────── */}
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700">
               <ShieldAlert size={15} /> Logs système &amp; audit de sécurité
+              {rafraichissementLogs && logsInitialises && (
+                <Loader2 size={13} className="animate-spin text-slate-400" />
+              )}
             </h2>
             <button
               type="button"
@@ -563,6 +531,7 @@ export default function AdminIntegrationsPage() {
               />
             </div>
 
+            <div className="min-h-[460px]">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500 text-left">
                 <tr>
@@ -573,8 +542,14 @@ export default function AdminIntegrationsPage() {
                   <th className="px-4 py-2.5 font-medium">IP</th>
                 </tr>
               </thead>
-              <tbody>
-                {chargementLogs ? (
+              <tbody
+                className={
+                  rafraichissementLogs && logsInitialises
+                    ? 'opacity-50 transition-opacity duration-150'
+                    : 'transition-opacity duration-150'
+                }
+              >
+                {!logsInitialises ? (
                   <tr>
                     <td colSpan={5} className="px-4 py-8 text-center text-slate-400">Chargement…</td>
                   </tr>
@@ -620,31 +595,10 @@ export default function AdminIntegrationsPage() {
                 )}
               </tbody>
             </table>
+            </div>
           </div>
         </section>
 
-        {/* ── Récapitulatif des dépendances backend ───────────────────────── */}
-        <section className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-          <h3 className="text-xs font-semibold text-slate-600 mb-2">
-            Dépendances backend de cet écran
-          </h3>
-          <ul className="text-[11px] text-slate-500 space-y-1">
-            <li>
-              ✅ <span className="font-mono">GET/PATCH /api/integrations/smtp/</span> et
-              <span className="font-mono"> /imap/</span> — existants (admin uniquement).
-            </li>
-            <li>
-              ⚠️ <span className="font-mono">POST /api/integrations/smtp/test/</span> et
-              <span className="font-mono"> /imap/test/</span> — ajoutés par le patch backend fourni.
-            </li>
-            <li>
-              ✅ <span className="font-mono">GET /api/logs/</span> — existant, filtres django-filter.
-            </li>
-            <li>
-              ❌ Clés API et webhooks — aucun modèle backend ; panneaux affichés en lecture seule.
-            </li>
-          </ul>
-        </section>
       </div>
     </>
   )

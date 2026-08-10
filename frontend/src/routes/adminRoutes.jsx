@@ -1,7 +1,7 @@
 // src/routes/adminRoutes.jsx
 // Sous-arbre de routes de l'espace administrateur.
 
-import { Route } from "react-router-dom";
+import { Navigate, Route } from "react-router-dom";
 import AdminLayout from "../components/admin/AdminLayout";
 import AdminOverviewPage from "../pages/admin/AdminOverviewPage";
 import AdminUsersPage from "../pages/AdminUsersPage";
@@ -10,7 +10,6 @@ import AdminEscalationsPage from "../pages/admin/AdminEscalationsPage";
 import AdminAiPage from "../pages/admin/AdminAiPage";
 import AdminNotificationsPage from "../pages/admin/AdminNotificationsPage";
 import AdminIntegrationsPage from "../pages/admin/AdminIntegrationsPage";
-import AdminAuditPage from "../pages/admin/AdminAuditPage";
 import AdminProfilePage from "../pages/AdminProfilePage";
 
 export const adminRoutes = (
@@ -22,7 +21,9 @@ export const adminRoutes = (
     <Route path="ia" element={<AdminAiPage />} />
     <Route path="notifications" element={<AdminNotificationsPage />} />
     <Route path="integrations" element={<AdminIntegrationsPage />} />
-    <Route path="audit" element={<AdminAuditPage />} />
+    {/* Ancienne page « Logs & audit » supprimée : les logs sont désormais
+        affichés dans l'écran Intégrations (« Logs système & audit de sécurité »). */}
+    <Route path="audit" element={<Navigate to="/admin/integrations" replace />} />
     <Route path="profil" element={<AdminProfilePage />} />
   </Route>
 );
