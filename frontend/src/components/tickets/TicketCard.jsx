@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { MessageSquare, ChevronRight, Star } from 'lucide-react'
+import { FileText, ChevronRight, Star } from 'lucide-react'
 import StatusBadge from './StatusBadge'
 import PriorityBadge from './PriorityBadge'
 import SlaBar from './SlaBar'
@@ -57,8 +57,8 @@ function TicketCard({ ticket }) {
             onClick={() => navigate(`/tickets/${ticket.id}`)}
             className="flex items-center gap-1.5 text-xs text-slate-600 border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-50"
           >
-            <MessageSquare size={13} />
-            Messages{ticket.unread_messages ? ` (${ticket.unread_messages})` : ''}
+            <FileText size={13} />
+            Détail de la demande
           </button>
         )}
         <button

@@ -1,13 +1,18 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send, Star } from 'lucide-react'
+import { ArrowLeft, Star, CheckCircle2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 import PriorityBadge from '../components/tickets/PriorityBadge'
 import StatusBadge from '../components/tickets/StatusBadge'
 import LifecycleStepper from '../components/tickets/LifecycleStepper'
 
-import { fetchTicket, fetchAttachments, rateTicket } from '../api/tickets'
+import {
+  fetchTicket,
+  fetchAttachments,
+  rateTicket,
+  closeTicket,
+} from '../api/tickets'
 
 const RESOLVED_STATUSES = ['RESOLVED', 'CLOSED']
 
@@ -22,16 +27,14 @@ function TicketDetailPage() {
   // création du ticket (NewTicketPage).
   const [attachments, setAttachments] = useState([])
 
-  // Onglet actif : conversation (par défaut) ou suivi de la demande
-  const [onglet, setOnglet] = useState('conversation')
-
-  // Partie messages (reste locale tant que le backend messages_app n'existe pas)
-  const [messages, setMessages] = useState([])
-  const [draft, setDraft] = useState('')
+  // Onglet actif : informations du ticket (par défaut) ou suivi de la demande.
+  // La messagerie a été retirée : aucun backend `messages_app` ne l'expose.
+  const [onglet, setOnglet] = useState('infos')
 
   const [rating, setRating] = useState(0)
   const [comment, setComment] = useState('')
   const [evaluationSent, setEvaluationSent] = useState(false)
+  const [clotureEnCours, setClotureEnCours] = useState(false)
 
   useEffect(() => {
     loadTicket()
@@ -43,8 +46,6 @@ function TicketDetailPage() {
 
       const ticketData = await fetchTicket(ticketId)
       setTicket(ticketData)
-
-      setMessages(ticketData.messages ?? [])
 
       if (ticketData.rating) {
         setRating(ticketData.rating.rating)
@@ -67,20 +68,20 @@ function TicketDetailPage() {
     }
   }
 
-  const sendMessage = () => {
-    if (!draft.trim()) return
-
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        author: 'client',
-        text: draft.trim(),
-        sentAt: new Date().toISOString(),
-      },
-    ])
-
-    setDraft('')
+  // Clôture par le client : disponible une fois le ticket résolu et évalué.
+  const submitCloture = async () => {
+    setClotureEnCours(true)
+    try {
+      await closeTicket(ticket.id)
+      toast.success('Ticket clôturé.')
+      loadTicket()
+    } catch (error) {
+      toast.error(
+        error.response?.data?.detail || 'Impossible de clôturer le ticket.'
+      )
+    } finally {
+      setClotureEnCours(false)
+    }
   }
 
   const submitRating = async () => {
@@ -122,6 +123,8 @@ function TicketDetailPage() {
   }
 
   const isResolved = RESOLVED_STATUSES.includes(ticket.current_status)
+  const isClosed = ticket.current_status === 'CLOSED'
+  const evaluationFaite = Boolean(ticket.rating) || evaluationSent
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -147,11 +150,11 @@ function TicketDetailPage() {
         </div>
       </header>
 
-      {/* Onglets Conversation / Suivi de la demande */}
+      {/* Onglets Informations / Suivi de la demande */}
       <div className="bg-white border-b border-slate-200 px-4">
         <div className="max-w-2xl mx-auto flex gap-1">
           {[
-            { cle: 'conversation', label: 'Conversation' },
+            { cle: 'infos', label: 'Informations' },
             { cle: 'suivi', label: 'Suivi de la demande' },
           ].map((o) => (
             <button
@@ -213,116 +216,144 @@ function TicketDetailPage() {
         </div>
       )}
 
-      {/* Onglet : Conversation */}
-      <div
-        className={`flex-1 max-w-2xl w-full mx-auto p-4 space-y-3 overflow-y-auto ${
-          onglet === 'conversation' ? '' : 'hidden'
-        }`}
-      >
-        {messages.length === 0 && (
-          <p className="text-center text-sm text-slate-400 py-6">
-            Aucun message pour ce ticket.
-          </p>
-        )}
-
-        {messages.map((m) => (
-          <div
-            key={m.id}
-            className={`flex ${
-              m.author === 'client' ? 'justify-end' : 'justify-start'
-            }`}
-          >
-            <div
-              className={`max-w-[75%] rounded-xl px-3 py-2 text-sm ${
-                m.author === 'client'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-white border border-slate-200 text-slate-700'
-              }`}
-            >
-              {m.text}
-              <p
-                className={`text-[10px] mt-1 ${
-                  m.author === 'client'
-                    ? 'text-primary-foreground/70'
-                    : 'text-slate-400'
-                }`}
-              >
-                {new Date(m.sentAt).toLocaleTimeString('fr-FR', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </p>
-            </div>
-          </div>
-        ))}
-
-        {isResolved && (
-          <div className="bg-white border border-slate-200 rounded-xl p-4 mt-4">
-            <p className="text-sm font-medium text-slate-800 mb-2">
-              Évaluer la résolution
+      {/* Onglet : Informations du ticket */}
+      {onglet === 'infos' && (
+        <div className="flex-1 max-w-2xl w-full mx-auto p-4 space-y-4 overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+            <p className="text-sm font-medium text-slate-800">
+              Détail de la demande
             </p>
 
-            {ticket.rating || evaluationSent ? (
-              <p className="text-sm text-slate-500">
-                Merci, ton évaluation a bien été enregistrée.
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">
+                Objet
               </p>
-            ) : (
-              <>
-                <div className="flex gap-1 mb-2">
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <button key={n} type="button" onClick={() => setRating(n)}>
+              <p className="text-sm text-slate-700">{ticket.title}</p>
+            </div>
+
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">
+                Description
+              </p>
+              <p className="text-sm text-slate-700 whitespace-pre-line">
+                {ticket.description || '—'}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">
+                  Référence
+                </p>
+                <p className="text-sm font-mono text-slate-600">
+                  {ticket.ticket_number}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">
+                  Créé le
+                </p>
+                <p className="text-sm text-slate-600">
+                  {ticket.created_at
+                    ? new Date(ticket.created_at).toLocaleString('fr-FR')
+                    : '—'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Évaluation puis clôture — visibles une fois le ticket résolu */}
+          {isResolved && (
+            <div className="bg-white border border-slate-200 rounded-xl p-4">
+              <p className="text-sm font-medium text-slate-800 mb-2">
+                Évaluer la résolution
+              </p>
+
+              {evaluationFaite ? (
+                <>
+                  <div className="flex items-center gap-1 mb-2">
+                    {[1, 2, 3, 4, 5].map((n) => (
                       <Star
-                        size={20}
+                        key={n}
+                        size={18}
                         className={
-                          n <= rating ? 'fill-accent text-accent' : 'text-slate-300'
+                          n <= rating ? 'fill-accent text-accent' : 'text-slate-200'
                         }
                       />
-                    </button>
-                  ))}
+                    ))}
+                  </div>
+
+                  <p className="text-sm text-slate-500">
+                    Merci, ton évaluation a bien été enregistrée.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="flex gap-1 mb-2">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button key={n} type="button" onClick={() => setRating(n)}>
+                        <Star
+                          size={20}
+                          className={
+                            n <= rating ? 'fill-accent text-accent' : 'text-slate-300'
+                          }
+                        />
+                      </button>
+                    ))}
+                  </div>
+
+                  <textarea
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    rows={2}
+                    placeholder="Commentaire (optionnel)"
+                    className="w-full text-sm border border-slate-200 rounded-lg p-2 mb-2 focus:outline-none focus:ring-2 focus:ring-secondary/40"
+                  />
+
+                  <button
+                    type="button"
+                    disabled={!rating}
+                    onClick={submitRating}
+                    className="text-sm bg-primary text-primary-foreground px-4 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/90 transition"
+                  >
+                    Soumettre l&apos;évaluation
+                  </button>
+                </>
+              )}
+
+              {/* Clôture : proposée après l'évaluation, tant que le ticket
+                  n'est pas déjà clôturé. */}
+              {evaluationFaite && !isClosed && (
+                <div className="border-t border-slate-100 mt-4 pt-4">
+                  <p className="text-sm text-slate-600 mb-2">
+                    Si la solution vous convient, vous pouvez clôturer ce ticket.
+                    Cette action est définitive.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={submitCloture}
+                    disabled={clotureEnCours}
+                    className="flex items-center gap-2 text-sm bg-primary text-primary-foreground px-4 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/90 transition"
+                  >
+                    <CheckCircle2 size={15} />
+                    {clotureEnCours ? 'Clôture…' : 'Marquer comme fermé'}
+                  </button>
                 </div>
+              )}
 
-                <textarea
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  rows={2}
-                  placeholder="Commentaire (optionnel)"
-                  className="w-full text-sm border border-slate-200 rounded-lg p-2 mb-2 focus:outline-none focus:ring-2 focus:ring-secondary/40"
-                />
-
-                <button
-                  type="button"
-                  disabled={!rating}
-                  onClick={submitRating}
-                  className="text-sm bg-primary text-primary-foreground px-4 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/90 transition"
-                >
-                  Soumettre l'évaluation
-                </button>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      {!isResolved && onglet === 'conversation' && (
-        <div className="border-t border-slate-200 bg-white p-3 flex items-center gap-2">
-          <input
-            type="text"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-            placeholder="Écrire un message... (Entrée pour envoyer)"
-            className="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-secondary/40"
-          />
-
-          <button
-            type="button"
-            onClick={sendMessage}
-            className="bg-primary text-primary-foreground p-2.5 rounded-lg hover:bg-primary/90 transition"
-          >
-            <Send size={16} />
-          </button>
+              {isClosed && (
+                <div className="border-t border-slate-100 mt-4 pt-4 flex items-center gap-2 text-sm text-slate-500">
+                  <CheckCircle2 size={15} className="text-emerald-500" />
+                  Ticket clôturé.
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
+
     </div>
   )
 }

@@ -61,6 +61,12 @@ export const reopenTicket = async (id, reason) => {
   return data
 }
 
+// Client : clôturer son ticket après évaluation
+export const closeTicket = async (id) => {
+  const { data } = await apiClient.post(`/tickets/${id}/close/`)
+  return data
+}
+
 // Client : évaluer
 export const rateTicket = async (id, rating, comment = '') => {
   const { data } = await apiClient.post(`/tickets/${id}/rate/`, { rating, comment })
