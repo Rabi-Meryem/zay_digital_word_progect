@@ -55,6 +55,7 @@ function NotificationsPanel() {
   const getText = (n) => n.message ?? n.text ?? n.title ?? ''
   const getDate = (n) => n.created_at ?? n.createdAt ?? null
   const getTicketId = (n) => n.ticket ?? n.ticket_id ?? n.ticketId ?? null
+  const getTargetUserEmail = (n) => n.target_user_email ?? null
 
   const openTicket = async (notification) => {
     if (!notification.is_read) {
@@ -73,6 +74,14 @@ function NotificationsPanel() {
 
     setOpen(false)
 
+    // Notif liée à un compte utilisateur (ex: PASSWORD_RESET_REQUEST) → fiche admin
+    const targetEmail = getTargetUserEmail(notification)
+    if (targetEmail) {
+      navigate(`/admin/utilisateurs?search=${encodeURIComponent(targetEmail)}`)
+      return
+    }
+
+    // Notif liée à un ticket → détail du ticket
     const ticketId = getTicketId(notification)
     if (ticketId) {
       navigate(`/agent/tickets/${ticketId}`)
@@ -158,15 +167,19 @@ function NotificationsPanel() {
                           <Icon size={15} />
                         </span>
                         <span className="min-w-0">
-                          <span className="block text-sm text-slate-700 leading-snug">
-
-                            {n.title}
-                            {n.ticket_number ? ` — ${n.ticket_number}` : ''}
-                          </span>
-                          <span className="block text-xs text-slate-400 mt-0.5">
-                            {formatAgo(n.created_at)}
-                          </span>
-                        </span>
+  <span className="block text-sm text-slate-700 leading-snug font-medium">
+    {n.title}
+    {n.ticket_number ? ` — ${n.ticket_number}` : ''}
+  </span>
+  {n.content && (
+    <span className="block text-xs text-slate-500 leading-snug mt-0.5">
+      {n.content}
+    </span>
+  )}
+  <span className="block text-xs text-slate-400 mt-0.5">
+    {formatAgo(n.created_at)}
+  </span>
+</span>
                         {!n.is_read && (
 
                           <span className="ml-auto mt-1.5 h-2 w-2 rounded-full bg-secondary shrink-0" />

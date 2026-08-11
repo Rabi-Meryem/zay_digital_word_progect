@@ -170,3 +170,5 @@ class AgentAvailabilitySerializer(serializers.ModelSerializer):
 
     def get_full_name(self, obj):
         return f"{obj.agent.first_name} {obj.agent.last_name}"
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()

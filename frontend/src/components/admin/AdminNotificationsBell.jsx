@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Bell, Check } from 'lucide-react'
 import {
   markNotificationRead,
@@ -22,6 +23,7 @@ function AdminNotificationsBell() {
   const [open, setOpen] = useState(false)
   const { unreadCount, items: liveItems } = useNotificationToasts()
   const [items, setItems] = useState([])
+  const navigate = useNavigate()
 
   useEffect(() => {
     setItems(liveItems)
@@ -30,15 +32,26 @@ function AdminNotificationsBell() {
   const isRead = (n) => n.is_read ?? n.read ?? false
   const getText = (n) => n.message ?? n.text ?? n.title ?? ''
   const getDate = (n) => n.created_at ?? n.createdAt ?? null
+  const getTargetUserEmail = (n) => n.target_user_email ?? null
 
-  const markOne = async (notification) => {
-    setItems((prev) =>
-      prev.map((n) => (n.id === notification.id ? { ...n, is_read: true, read: true } : n))
-    )
-    try {
-      await markNotificationRead(notification.id)
-    } catch {
-      // silencieux : l'affichage local est déjà à jour
+  const handleClick = async (notification) => {
+    if (!isRead(notification)) {
+      setItems((prev) =>
+        prev.map((n) => (n.id === notification.id ? { ...n, is_read: true, read: true } : n))
+      )
+      try {
+        await markNotificationRead(notification.id)
+      } catch {
+        // silencieux : l'affichage local est déjà à jour
+      }
+    }
+
+    setOpen(false)
+
+    // Notif liée à un compte utilisateur (ex: PASSWORD_RESET_REQUEST) → fiche admin
+    const targetEmail = getTargetUserEmail(notification)
+    if (targetEmail) {
+      navigate(`/admin/utilisateurs?search=${encodeURIComponent(targetEmail)}`)
     }
   }
 
@@ -101,13 +114,18 @@ function AdminNotificationsBell() {
                     <li key={n.id}>
                       <button
                         type="button"
-                        onClick={() => markOne(n)}
+                        onClick={() => handleClick(n)}
                         className={`w-full flex items-start gap-2.5 px-4 py-3 text-left hover:bg-slate-50 ${
                           lu ? 'opacity-60' : ''
                         }`}
                       >
                         <span className="min-w-0">
                           <span className="block text-sm text-slate-700 leading-snug">{getText(n)}</span>
+                          {n.content && (
+                            <span className="block text-xs text-slate-500 leading-snug mt-0.5">
+                              {n.content}
+                            </span>
+                          )}
                           <span className="block text-xs text-slate-400 mt-0.5">{formatAgo(getDate(n))}</span>
                         </span>
                         {!lu && (

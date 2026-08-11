@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { Search, UserPlus, Shield, KeyRound, Ban, RotateCcw, X, Pencil } from 'lucide-react'
 import {
@@ -15,6 +16,10 @@ import { rolesApi } from "../api/adminApi";
 //
 // Le plan (Essentiel/Standard/Premium) n'a de sens que pour un compte CLIENT —
 // il détermine les délais SLA appliqués à ses tickets (voir sla/services.py).
+//
+// La recherche peut être pré-remplie via l'URL (?search=email) — utilisé
+// quand on arrive depuis une notification « Demande de réinitialisation de
+// mot de passe » (voir NotificationsPanel.jsx).
 // ─────────────────────────────────────────────────────────────────────────────
 
 const PLAN_LABELS = {
@@ -33,9 +38,12 @@ const DEMO = [
 ]
 
 function AdminUsersPage() {
+  const [searchParams] = useSearchParams()
+
   const [users, setUsers] = useState([])
   const [roleFilter, setRoleFilter] = useState('')
-  const [search, setSearch] = useState('')
+  // Pré-rempli depuis l'URL si on arrive via une notification (?search=email)
+  const [search, setSearch] = useState(searchParams.get('search') ?? '')
   const [showCreate, setShowCreate] = useState(false)
   const [editModal, setEditModal] = useState(null)   // user en cours de modification complète
   const [pwdModal, setPwdModal] = useState(null)     // user en cours de reset mdp
@@ -44,6 +52,16 @@ function AdminUsersPage() {
   useEffect(() => {
     rolesApi.list().then(res => setRoleOptions(res.data))
   }, [])
+
+  // Si le paramètre d'URL change après le montage (navigation depuis une
+  // autre notification pendant que la page est déjà ouverte), on resynchronise.
+  useEffect(() => {
+    const fromUrl = searchParams.get('search')
+    if (fromUrl && fromUrl !== search) {
+      setSearch(fromUrl)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   const load = useCallback(() => {
     listUsers({ role: roleFilter || undefined, search: search || undefined })

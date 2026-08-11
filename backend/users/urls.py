@@ -3,7 +3,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from users.views import (
     LoginView, LogoutView, MeView,
     UserListCreateView, UserDetailView,
-    UserActivateView, PasswordResetView, RoleListView,
+    UserActivateView, PasswordResetView, RoleListView,PasswordResetRequestView,
 )
 from users.views_agents import AgentListView, AgentAvailabilityUpdateView
 urlpatterns = [
@@ -40,5 +40,6 @@ urlpatterns = [
          name='password-reset'),
      path('agents/', AgentListView.as_view(), name='agent-list'),
      path('agents/<int:agent_id>/availability/', AgentAvailabilityUpdateView.as_view(), name='agent-availability-update'),
+     path('auth/password-reset-request/', PasswordResetRequestView.as_view(), name='password-reset-request'),
 ]
  

@@ -87,7 +87,7 @@ class NotificationService:
     # Le reste (notify, _send_email...) ne change pas
     # -----------------------------------------------------------------
 
-    def notify(self, event_type, ticket, recipients, override_title=None, override_content=None):
+    def notify(self, event_type, ticket, recipients, override_title=None, override_content=None, target_user=None):
         notif_type = NotificationType.objects.get(name=event_type)
 
         if not notif_type.in_app_enabled and not notif_type.email_enabled:
@@ -101,18 +101,17 @@ class NotificationService:
 
             if notif_type.in_app_enabled:
                 notif = Notification.objects.create(
-                    user=user, ticket=ticket, notification_type=notif_type,
+                    user=user, ticket=ticket, target_user=target_user, notification_type=notif_type,
                     title=title, content=content,
                 )
 
             if notif_type.email_enabled:
                 if notif is None:
                     notif = Notification.objects.create(
-                        user=user, ticket=ticket, notification_type=notif_type,
+                        user=user, ticket=ticket, target_user=target_user, notification_type=notif_type,
                         title=title, content=content, is_read=True,
                     )
                 self._send_email(event_type, ticket, user, notif)
-
     def _get_title(self, event_type, ticket):
         titles = {
             "TICKET_CREATED": f"Ticket {ticket.ticket_number} créé",

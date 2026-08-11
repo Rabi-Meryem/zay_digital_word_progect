@@ -12,7 +12,7 @@ from notifications.services import notification_service
 from users.models import User, LoginHistory ,Role
 from users.serializers import (
     UserSerializer, UserListSerializer, UserCreateSerializer,
-    UserUpdateSerializer, PasswordResetSerializer, ProfileUpdateSerializer,RoleSerializer
+    UserUpdateSerializer, PasswordResetSerializer, ProfileUpdateSerializer,RoleSerializer, PasswordResetRequestSerializer,
 )
 from users.permissions import IsAdminRole, IsAdminOrSupervisor
 from users.filters import UserFilter
@@ -452,3 +452,47 @@ class RoleListView(APIView):
     def get(self, request):
         roles = Role.objects.all().order_by('id')
         return Response(RoleSerializer(roles, many=True).data)
+class PasswordResetRequestView(APIView):
+    """
+    POST /api/auth/password-reset-request/
+    Écran 1.1 — le client saisit son email. On ne révèle jamais si le
+    compte existe. Si oui : notification in-app envoyée à tous les
+    admins actifs, avec l'email de la personne qui a fait la demande.
+    L'admin réinitialise ensuite le mot de passe depuis l'écran 3.2.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        email = serializer.validated_data['email'].strip().lower()
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            user = None
+
+        if user:
+            log_action(
+                None, AuditLog.ActionType.UPDATE,
+                f'Demande de réinitialisation de mot de passe pour {user.email}',
+                request, 'User', user.id
+            )
+            admins = User.objects.filter(role__name='ADMIN', is_active=True)
+            if admins:
+                notification_service.notify(
+                    'PASSWORD_RESET_REQUEST', None, recipients=list(admins),
+                    override_title="Demande de réinitialisation de mot de passe",
+                    override_content=(
+                        f"{user.first_name} {user.last_name} ({user.email}) "
+                        f"demande une réinitialisation de mot de passe."
+                    ),
+                    target_user=user, 
+                )
+
+        return Response(
+            {'detail': 'Si un compte existe avec cette adresse, la demande a été transmise.'},
+            status=status.HTTP_200_OK
+        )

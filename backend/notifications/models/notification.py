@@ -23,6 +23,14 @@ class Notification(models.Model):
         related_name="notifications",
         db_column="ticket_id",
     )
+    target_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="targeted_notifications",
+        db_column="target_user_id",
+    )
 
     notification_type = models.ForeignKey(
         "notifications.NotificationType",

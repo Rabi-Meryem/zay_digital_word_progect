@@ -328,9 +328,13 @@ class TicketResolveView(APIView):
 # POST /api/tickets/<id>/close/
 # Le superviseur clôture définitivement le ticket
 # ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# POST /api/tickets/<id>/close/
+# Le client (ticket résolu) ou le superviseur/admin clôture définitivement le ticket
+# ─────────────────────────────────────────────────────────────────────────────
 class TicketCloseView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminOrSupervisor]
- 
+    permission_classes = [IsAuthenticated]
+
     def post(self, request, pk):
         ticket = get_ticket_or_404(pk)
         if not ticket:
@@ -338,23 +342,35 @@ class TicketCloseView(APIView):
                 {'detail': 'Ticket introuvable.'},
                 status=status.HTTP_404_NOT_FOUND
             )
- 
+
+        role = request.user.role.name
+
+        if role == 'CLIENT':
+            if ticket.client != request.user:
+                return Response(
+                    {'detail': "Ce ticket ne vous appartient pas."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        elif role not in ('ADMIN', 'SUPERVISOR'):
+            return Response(
+                {'detail': "Vous n'êtes pas autorisé à clôturer ce ticket."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         if ticket.current_status != Ticket.Status.RESOLVED:
             return Response(
                 {'detail': "Seul un ticket résolu peut être clôturé."},
                 status=status.HTTP_400_BAD_REQUEST
             )
- 
+
         ticket = ticket_service.change_status(
             ticket     = ticket,
             new_status = Ticket.Status.CLOSED,
             changed_by = request.user,
-            reason     = "Ticket clôturé par le superviseur",
+            reason     = "Ticket clôturé par le client" if role == 'CLIENT' else "Ticket clôturé par le superviseur",
         )
- 
+
         return Response(TicketDetailSerializer(ticket).data)
- 
- 
 # ─────────────────────────────────────────────────────────────────────────────
 # POST /api/tickets/<id>/reopen/
 # Le client rouvre un ticket qu'il juge mal résolu
