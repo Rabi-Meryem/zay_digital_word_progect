@@ -31,6 +31,9 @@ const STATUS_HISTORY_LABELS = {
   REOPENED: 'Réouvert par le client',
 }
 
+// Extensions considérées comme des images pour la preview en modale.
+const IMAGE_EXTENSION_REGEX = /\.(png|jpe?g|gif|webp|svg)$/i
+
 function fmtTime(iso) {
   return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
 }
@@ -68,6 +71,7 @@ function AgentTicketPage() {
 
   const [status, setStatus] = useState(ticket?.current_status ?? 'OPEN')
   const [showEscalation, setShowEscalation] = useState(false)
+  const [previewFile, setPreviewFile] = useState(null)
 
   const timeline = useMemo(
     () => (ticket ? buildTimeline(ticket) : []),
@@ -224,24 +228,36 @@ function AgentTicketPage() {
 
             {ticket.attachments?.length > 0 && (
               <ul className="mt-3 space-y-1.5">
-                {ticket.attachments.map((file) => (
-                  <li
-                    key={file.id}
-                    className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600"
-                  >
-                    <Paperclip size={14} className="text-slate-400 shrink-0" />
-                    <span className="truncate flex-1">{file.file_name}</span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        toast("Aperçu de la pièce jointe : pas encore disponible.", { icon: 'ℹ️' })
-                      }
-                      className="text-xs font-medium text-secondary hover:underline"
+                {ticket.attachments.map((file) => {
+                  const isImage = IMAGE_EXTENSION_REGEX.test(file.original_name)
+                  return (
+                    <li
+                      key={file.id}
+                      className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600"
                     >
-                      Voir
-                    </button>
-                  </li>
-                ))}
+                      <Paperclip size={14} className="text-slate-400 shrink-0" />
+                      <span className="truncate flex-1">{file.original_name}</span>
+                      {isImage ? (
+                        <button
+                          type="button"
+                          onClick={() => setPreviewFile(file)}
+                          className="text-xs font-medium text-secondary hover:underline shrink-0"
+                        >
+                          Voir
+                        </button>
+                      ) : (
+                        <a
+                          href={file.file_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs font-medium text-secondary hover:underline shrink-0"
+                        >
+                          Voir
+                        </a>
+                      )}
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </section>
@@ -369,6 +385,31 @@ function AgentTicketPage() {
           onClose={() => setShowEscalation(false)}
           onConfirm={confirmEscalation}
         />
+      )}
+
+      {previewFile && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+          onClick={() => setPreviewFile(null)}
+        >
+          <div className="max-w-3xl max-h-[85vh] w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-white truncate">{previewFile.original_name}</p>
+              <button
+                type="button"
+                onClick={() => setPreviewFile(null)}
+                className="text-white text-sm hover:opacity-70"
+              >
+                Fermer ✕
+              </button>
+            </div>
+            <img
+              src={previewFile.file_url}
+              alt={previewFile.original_name}
+              className="w-full h-auto max-h-[75vh] object-contain rounded-lg bg-white"
+            />
+          </div>
+        </div>
       )}
     </div>
   )

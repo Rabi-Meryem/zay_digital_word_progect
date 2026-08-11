@@ -153,14 +153,63 @@ class NotificationService:
         }
         return contents.get(event_type, "")
 
+   # -----------------------------------------------------------------
+    # Envoi de l'email correspondant à la notification
+    # -----------------------------------------------------------------
+
+    TEMPLATE_MAP = {
+        "TICKET_CREATED":   "tickets_created.html",
+        "TICKET_ASSIGNED":  "tickets_assignment.html",
+        "TICKET_RESOLVED":  "tickets_resolved.html",
+        "NEW_MESSAGE":      "new_message.html",
+        "SLA_WARNING":      "sla_warning.html",
+        "SLA_EXCEEDED":     "sla_exceeded.html",
+        # Les autres events (TICKET_CLOSED, TICKET_REOPENED, ESCALATION_*,
+        # SYSTEM_ERROR, API_WEBHOOK_ERROR, SECURITY_ALERT, AGENT_OVERLOAD,
+        # CRITICAL_TICKET_UNHANDLED) n'ont pas encore de template HTML dédié.
+        # Ils restent en notification "in-app" uniquement pour l'instant.
+    }
+
     def _send_email(self, event_type, ticket, user, notif):
-        # ... inchangé, mais attention : les events système (SYSTEM_ERROR,
-        # API_WEBHOOK_ERROR, SECURITY_ALERT, AGENT_OVERLOAD) n'ont pas de
-        # template dans template_map -> return immédiat, donc pas d'email
-        # envoyé pour eux tant que tu n'ajoutes pas de templates admin.
         if ticket is None:
             return
-        # ... reste inchangé
 
+        template_name = self.TEMPLATE_MAP.get(event_type)
+        if not template_name:
+            return  # pas de template prévu pour cet événement -> pas d'email
+
+        from django.conf import settings
+
+        portal_url = f"{settings.FRONTEND_URL}/tickets/{ticket.id}"
+
+        context = {
+            'recipient_name': self._display_name(user),
+            'client_name':    self._display_name(user),
+            'agent_name':     self._display_name(user),
+            'ticket_number':  ticket.ticket_number,
+            'ticket_title':   ticket.title,
+            'priority':       ticket.get_priority_display() if ticket.priority else '—',
+            'sla_deadline':   ticket.sla_deadline.strftime('%d/%m/%Y %H:%M') if ticket.sla_deadline else '—',
+            'message_preview': notif.content,
+            'remaining_time': '—',
+            'portal_url':     portal_url,
+        }
+
+        html = render_to_string(f"emails/{template_name}", context)
+
+        try:
+            email_service.send(
+                to_email=user.email,
+                subject=notif.title,
+                body_html=html,
+            )
+        except Exception:
+            # L'échec est déjà loggé dans AuditLog par email_service.send()
+            pass
+    def _display_name(self, user):
+        first = getattr(user, 'first_name', '') or ''
+        last = getattr(user, 'last_name', '') or ''
+        full = f"{first} {last}".strip()
+        return full or user.email
 
 notification_service = NotificationService()

@@ -16,6 +16,9 @@ import {
 
 const RESOLVED_STATUSES = ['RESOLVED', 'CLOSED']
 
+// Extensions considérées comme des images pour la preview en modale.
+const IMAGE_EXTENSION_REGEX = /\.(png|jpe?g|gif|webp|svg)$/i
+
 function TicketDetailPage() {
   const { ticketId } = useParams()
   const navigate = useNavigate()
@@ -26,6 +29,7 @@ function TicketDetailPage() {
   // Pièces jointes : lecture seule ici. L'ajout se fait uniquement à la
   // création du ticket (NewTicketPage).
   const [attachments, setAttachments] = useState([])
+  const [previewFile, setPreviewFile] = useState(null)
 
   // Onglet actif : informations du ticket (par défaut) ou suivi de la demande.
   // La messagerie a été retirée : aucun backend `messages_app` ne l'expose.
@@ -186,30 +190,44 @@ function TicketDetailPage() {
               </p>
 
               <div className="space-y-2">
-                {attachments.map((file) => (
-                  <div
-                    key={file.id}
-                    className="border rounded-lg p-3 flex justify-between items-center"
-                  >
-                    <div>
-                      <p className="text-sm font-medium">{file.original_name}</p>
-                      <p className="text-xs text-slate-500">
-                        {(file.file_size / 1024).toFixed(1)} Ko
-                      </p>
-                    </div>
+                {attachments.map((file) => {
+                  const isImage = IMAGE_EXTENSION_REGEX.test(file.original_name)
+                  return (
+                    <div
+                      key={file.id}
+                      className="border rounded-lg p-3 flex justify-between items-center"
+                    >
+                      <div>
+                        <p className="text-sm font-medium">{file.original_name}</p>
+                        <p className="text-xs text-slate-500">
+                          {(file.file_size / 1024).toFixed(1)} Ko
+                        </p>
+                      </div>
 
-                    {file.file_url && (
-                      <a
-                        href={file.file_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-secondary text-sm hover:underline"
-                      >
-                        Télécharger
-                      </a>
-                    )}
-                  </div>
-                ))}
+                      {file.file_url && (
+                        <div className="flex items-center gap-3 shrink-0">
+                          {isImage && (
+                            <button
+                              type="button"
+                              onClick={() => setPreviewFile(file)}
+                              className="text-secondary text-sm hover:underline"
+                            >
+                              Voir
+                            </button>
+                          )}
+                          <a
+                            href={file.file_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-secondary text-sm hover:underline"
+                          >
+                            Télécharger
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
@@ -354,6 +372,32 @@ function TicketDetailPage() {
         </div>
       )}
 
+
+
+      {previewFile && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+          onClick={() => setPreviewFile(null)}
+        >
+          <div className="max-w-3xl max-h-[85vh] w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-white truncate">{previewFile.original_name}</p>
+              <button
+                type="button"
+                onClick={() => setPreviewFile(null)}
+                className="text-white text-sm hover:opacity-70"
+              >
+                Fermer ✕
+              </button>
+            </div>
+            <img
+              src={previewFile.file_url}
+              alt={previewFile.original_name}
+              className="w-full h-auto max-h-[75vh] object-contain rounded-lg bg-white"
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

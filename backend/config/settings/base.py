@@ -1,6 +1,7 @@
 from decouple import config
 from pathlib import Path
 from datetime import timedelta
+import os
  
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 SECRET_KEY = config('SECRET_KEY')
@@ -119,7 +120,14 @@ AI_SERVICE_URL = config('AI_SERVICE_URL', default='http://localhost:8001')
 # Stockage S3 / MinIO — pièces jointes (ticket_attachments, message_attachments)
 # et rapports PDF (reports). Voir docker-compose.yml pour les identifiants MinIO.
 # -----------------------------------------------------------------------
-DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+STORAGES = {
+    "default": {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+    },
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+}
 AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID')
 AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY')
 AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME')
@@ -127,3 +135,9 @@ AWS_S3_ENDPOINT_URL = config('AWS_S3_ENDPOINT_URL')
 AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', default='us-east-1')
 AWS_S3_FILE_OVERWRITE = False
 AWS_DEFAULT_ACL = None
+AWS_S3_ADDRESSING_STYLE = 'path'
+AWS_S3_SIGNATURE_VERSION = 's3v4'
+
+FERNET_KEY = config('FERNET_KEY').encode()
+FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173')
+INTERNAL_WEBHOOK_SECRET = config('INTERNAL_WEBHOOK_SECRET')
