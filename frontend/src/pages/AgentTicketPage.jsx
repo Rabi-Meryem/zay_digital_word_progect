@@ -245,6 +245,34 @@ function AgentTicketPage() {
               </ul>
             )}
           </section>
+          
+          {ticket.rating && (
+            <section className="bg-white border border-slate-200 rounded-xl p-4">
+              <p className="text-xs font-semibold tracking-wider text-slate-400 uppercase mb-3">
+                Évaluation du client
+              </p>
+              <div className="flex items-center gap-1.5 mb-2">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <span
+                    key={n}
+                    className={n <= ticket.rating.rating ? 'text-amber-400' : 'text-slate-200'}
+                  >
+                    ★
+                  </span>
+                ))}
+                <span className="text-sm font-medium text-slate-600 ml-1">
+                  {ticket.rating.rating}/5
+                </span>
+              </div>
+              {ticket.rating.comment ? (
+                <p className="text-sm text-slate-700 leading-relaxed italic">
+                  « {ticket.rating.comment} »
+                </p>
+              ) : (
+                <p className="text-xs text-slate-400">Aucun commentaire laissé.</p>
+              )}
+            </section>
+          )}
 
           {!isResolved && (
             <section className="bg-white border border-slate-200 rounded-xl p-4">
