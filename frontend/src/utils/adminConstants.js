@@ -35,7 +35,6 @@ export const ADMIN_NAV = [
   { key: "overview", label: "Vue d'ensemble", to: "/admin" },
   { key: "users", label: "Utilisateurs", to: "/admin/utilisateurs" },
   { key: "sla", label: "Règles SLA", to: "/admin/sla" },
-  { key: "escalations", label: "Escalades", to: "/admin/escalades" },
   { key: "ai", label: "Module IA", to: "/admin/ia" },
   { key: "notifications", label: "Notifications", to: "/admin/notifications" },
   { key: "audit", label: "Logs & Audit", to: "/admin/audit" },
