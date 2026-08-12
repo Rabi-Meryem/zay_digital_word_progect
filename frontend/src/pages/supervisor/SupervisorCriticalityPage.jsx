@@ -22,7 +22,11 @@ const NIVEAUX = [
 
 function CriticalityModal({ ticket, agents, onClose, onDone }) {
   const [priority, setPriority] = useState(ticket.priority ?? '')
-  const [agentIdx, setAgentIdx] = useState(null)
+  const [agentIdx, setAgentIdx] = useState(() => {
+    if (!ticket.agent) return null
+    const i = agents.findIndex((a) => a.agent_id === ticket.agent.id)
+    return i === -1 ? null : i
+  })
   const [saving, setSaving] = useState(false)
 
   async function confirm() {
