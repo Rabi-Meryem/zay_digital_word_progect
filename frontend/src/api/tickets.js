@@ -14,10 +14,14 @@ export const fetchTicket = async (id) => {
 }
 
 // Créer un ticket (client) — avec pièces jointes optionnelles
-export const createTicket = async ({ title, description, files = [] }) => {
+// Créer un ticket — client (pour lui-même) ou superviseur (pour un client via clientId)
+export const createTicket = async ({ title, description, files = [], clientId }) => {
   const formData = new FormData()
   formData.append('title', title)
   formData.append('description', description)
+  if (clientId) {
+    formData.append('client_id', clientId)
+  }
   files.forEach((file) => formData.append('attachments', file))
 
   const { data } = await apiClient.post('/tickets/', formData, {

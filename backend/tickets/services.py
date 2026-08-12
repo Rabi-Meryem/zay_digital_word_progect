@@ -142,7 +142,7 @@ class TicketService:
     # ASSIGNER UN TICKET À UN AGENT
     # ─────────────────────────────────────────────────────────────────────────
     @transaction.atomic
-    def assign_ticket(self, ticket, agent, assigned_by):
+    def assign_ticket(self, ticket, agent, assigned_by, note=''):
         from_agent = ticket.assigned_agent
 
         ticket.assigned_agent = agent
@@ -155,11 +155,16 @@ class TicketService:
             assigned_to     = agent,
             assigned_by     = assigned_by,
             assignment_date = timezone.now(),
+            reason            = note,
         )
+
+        reason = f"Assigné à {agent.first_name} {agent.last_name}"
+        if note:
+            reason += f" — Note : {note}"
 
         self.change_status(
             ticket, Ticket.Status.ASSIGNED, assigned_by,
-            reason=f"Assigné à {agent.first_name} {agent.last_name}"
+            reason=reason
         )
 
         self._update_agent_workload(agent)
@@ -172,13 +177,18 @@ class TicketService:
             description  = (
                 f"Ticket {ticket.ticket_number} assigné à "
                 f"{agent.first_name} {agent.last_name}"
+                + (f" — Note : {note}" if note else "")
             ),
         )
 
         # Notifications (module 5.2.2)
+        agent_message = f"Le ticket {ticket.ticket_number} vous a été assigné."
+        if note:
+            agent_message += f"\nNote du superviseur : {note}"
+
         notification_service.notify(
             'TICKET_ASSIGNED', ticket, recipients=[agent],
-            override_content=f"Le ticket {ticket.ticket_number} vous a été assigné.",
+            override_content=agent_message,
         )
         notification_service.notify(
             'TICKET_ASSIGNED', ticket, recipients=[ticket.client],
@@ -360,7 +370,11 @@ class TicketService:
             ),
         )
 
-        self.assign_ticket(ticket, agent, supervisor)
+        # L'agent est optionnel : on ne réaffecte que s'il a été choisi.
+        # Si aucun agent n'est fourni, le ticket garde son affectation actuelle
+        # (ou reste non affecté) — seule la priorité/SLA est mise à jour.
+        if agent:
+            self.assign_ticket(ticket, agent, supervisor)
 
         return ticket
 

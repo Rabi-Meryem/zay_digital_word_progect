@@ -496,3 +496,34 @@ class PasswordResetRequestView(APIView):
             {'detail': 'Si un compte existe avec cette adresse, la demande a été transmise.'},
             status=status.HTTP_200_OK
         )
+class ClientListView(APIView):
+    """
+    GET /api/users/clients/?search=xxx
+    Liste des clients actifs — utilisée par le superviseur pour créer
+    un ticket "pour le compte de" quelqu'un (voir TicketListCreateView.post).
+    """
+    permission_classes = [IsAuthenticated, IsAdminOrSupervisor]
+
+    def get(self, request):
+        from django.db.models import Q
+
+        search = request.GET.get('search', '').strip()
+        qs = User.objects.filter(role__name='CLIENT', is_active=True)
+
+        if search:
+            qs = qs.filter(
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search) |
+                Q(email__icontains=search)
+            )
+
+        qs = qs.order_by('first_name', 'last_name')[:20]
+
+        return Response([
+            {
+                'id':        u.id,
+                'full_name': f"{u.first_name} {u.last_name}".strip() or u.email,
+                'email':     u.email,
+            }
+            for u in qs
+        ])

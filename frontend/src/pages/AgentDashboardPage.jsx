@@ -58,15 +58,15 @@ function AgentDashboardPage() {
     return counts
   }, [activeTickets])
 
-  const urgentTickets = useMemo(
+  // Tous les tickets actifs (toutes priorités confondues), triés par
+  // priorité puis par échéance SLA la plus proche.
+  const sortedActiveTickets = useMemo(
     () =>
-      activeTickets
-        .filter((t) => t.priority !== 'LOW')
-        .sort(
-          (a, b) =>
-            PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority] ||
-            new Date(a.sla_deadline) - new Date(b.sla_deadline)
-        ),
+      [...activeTickets].sort(
+        (a, b) =>
+          PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority] ||
+          new Date(a.sla_deadline) - new Date(b.sla_deadline)
+      ),
     [activeTickets]
   )
 
@@ -91,21 +91,16 @@ function AgentDashboardPage() {
       </div>
 
       <p className="text-xs font-semibold tracking-wider text-slate-400 uppercase mb-3">
-        Tickets urgents — par priorité SLA
+        Tickets en cours — par priorité SLA
       </p>
-      {urgentTickets.length === 0 ? (
-        <p className="text-center text-sm text-slate-400 py-10">Aucun ticket urgent. 🎉</p>
+      {sortedActiveTickets.length === 0 ? (
+        <p className="text-center text-sm text-slate-400 py-10">Aucun ticket en cours. 🎉</p>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 pb-2">
-          {urgentTickets.map((ticket) => (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 pb-6">
+          {sortedActiveTickets.map((ticket) => (
             <AgentTicketCard key={ticket.id} ticket={ticket} />
           ))}
         </div>
-      )}
-      {countsByPriority.LOW > 0 && (
-        <p className="text-center text-xs text-slate-400 pt-1 pb-6">
-          + {countsByPriority.LOW} tickets Basse priorité hors file urgente
-        </p>
       )}
 
       {resolvedTickets.length > 0 && (

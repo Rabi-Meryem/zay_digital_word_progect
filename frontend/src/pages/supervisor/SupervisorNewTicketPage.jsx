@@ -2,26 +2,21 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Création d'un ticket par le SUPERVISEUR (/supervisor/tickets/nouveau).
 //
-// Côté backend, c'est déjà autorisé : TicketListCreateView.post accepte les
-// rôles CLIENT et SUPERVISOR (backend/tickets/views.py). Aucun changement
-// serveur n'est nécessaire pour cet écran.
-//
-// ⚠️ Limite connue du backend : ticket_service.create_ticket(client=request.user)
-// enregistre l'auteur comme client du ticket. Un ticket créé ici apparaît donc
-// au nom du superviseur, pas au nom d'un client tiers. Pour permettre la saisie
-// « pour le compte de … », il faudrait que le serializer accepte un client_id
-// (voir la note en bas de l'écran et le fichier NOTES_POUR_MERYEM.md).
+// Le ticket est désormais créé au nom du CLIENT sélectionné (client_id),
+// et non plus au nom du superviseur. Voir backend/tickets/views.py
+// (TicketListCreateView.post) et backend/tickets/serializers.py
+// (TicketCreateSerializer.client_id).
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useState, useEffect, useCallback } from 'react'
+import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useNavigate } from 'react-router-dom'
-import { useSelector } from 'react-redux'
 import toast from 'react-hot-toast'
-import { ArrowLeft, Paperclip, X, Send, Sparkles, Info } from 'lucide-react'
+import { ArrowLeft, Paperclip, X, Send, Sparkles, User as UserIcon, Search } from 'lucide-react'
 import { createTicket } from '../../api/tickets'
+import { searchClients } from '../../api/users'
 
 const MAX_FICHIERS = 3
 const TAILLE_MAX_MO = 5
@@ -34,6 +29,10 @@ const ticketSchema = z.object({
   description: z
     .string()
     .min(30, 'Décris le problème en 30 caractères minimum pour permettre une analyse fiable.'),
+  clientId: z
+    .number({ invalid_type_error: 'Sélectionne le client concerné par ce ticket.' })
+    .int()
+    .positive('Sélectionne le client concerné par ce ticket.'),
 })
 
 const CAS_USAGE = [
@@ -44,18 +43,60 @@ const CAS_USAGE = [
 
 function SupervisorNewTicketPage() {
   const navigate = useNavigate()
-  const user = useSelector((state) => state.auth.user)
   const [fichiers, setFichiers] = useState([])
   const [envoi, setEnvoi] = useState(false)
+
+  // ── Recherche / sélection du client ──
+  const [recherche, setRecherche] = useState('')
+  const [resultats, setResultats] = useState([])
+  const [chargementClients, setChargementClients] = useState(false)
+  const [clientChoisi, setClientChoisi] = useState(null)
 
   const {
     register,
     handleSubmit,
     watch,
+    control,
+    setValue,
     formState: { errors },
   } = useForm({ resolver: zodResolver(ticketSchema) })
 
   const description = watch('description') ?? ''
+
+  // Recherche des clients avec un léger debounce
+  useEffect(() => {
+    if (!recherche.trim()) {
+      setResultats([])
+      return
+    }
+    const timer = setTimeout(async () => {
+      setChargementClients(true)
+      try {
+        const data = await searchClients(recherche.trim())
+        setResultats(data)
+      } catch (error) {
+        toast.error('Impossible de charger la liste des clients.')
+      } finally {
+        setChargementClients(false)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [recherche])
+
+  const choisirClient = useCallback(
+    (client) => {
+      setClientChoisi(client)
+      setValue('clientId', client.id, { shouldValidate: true })
+      setRecherche('')
+      setResultats([])
+    },
+    [setValue]
+  )
+
+  const retirerClient = () => {
+    setClientChoisi(null)
+    setValue('clientId', undefined, { shouldValidate: true })
+  }
 
   const ajouterFichiers = (e) => {
     const nouveaux = Array.from(e.target.files ?? [])
@@ -80,6 +121,7 @@ function SupervisorNewTicketPage() {
       const ticket = await createTicket({
         title: values.title,
         description: values.description,
+        clientId: values.clientId,
         files: fichiers,
       })
 
@@ -87,23 +129,20 @@ function SupervisorNewTicketPage() {
         ticket.attachments_rejected.forEach((r) => toast.error(`${r.file} : ${r.reason}`))
       }
 
-      toast.success(`Ticket ${ticket.ticket_number} créé.`)
+      toast.success(`Ticket ${ticket.ticket_number} créé pour ${clientChoisi?.full_name}.`)
       navigate('/supervisor/affectation')
     } catch (error) {
       toast.error(
         error.response?.data?.detail ||
           error.response?.data?.title?.[0] ||
           error.response?.data?.description?.[0] ||
+          error.response?.data?.client_id?.[0] ||
           'Impossible de créer le ticket.'
       )
     } finally {
       setEnvoi(false)
     }
   }
-
-  const nomSuperviseur = user
-    ? `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim() || user.email
-    : 'vous'
 
   return (
     <div className="max-w-6xl">
@@ -118,13 +157,82 @@ function SupervisorNewTicketPage() {
 
       <h1 className="text-lg font-semibold text-slate-800">Nouveau ticket</h1>
       <p className="text-xs text-slate-400 mt-0.5 mb-4">
-        Ouvrir un ticket depuis la console de supervision — il rejoint la file d&apos;affectation
+        Ouvrir un ticket pour le compte d&apos;un client — il rejoint la file d&apos;affectation
         normale et suit les mêmes règles SLA.
       </p>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
         {/* Colonne principale */}
         <div className="lg:col-span-2 space-y-4">
+          {/* ── Sélection du client ── */}
+          <div className="bg-white rounded-lg border border-slate-200 p-4">
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Client concerné
+            </label>
+
+            {clientChoisi ? (
+              <div className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                <span className="flex items-center gap-2 text-sm text-slate-700">
+                  <UserIcon size={15} className="text-slate-400" />
+                  {clientChoisi.full_name}
+                  <span className="text-xs text-slate-400">({clientChoisi.email})</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={retirerClient}
+                  className="text-slate-400 hover:text-danger"
+                  aria-label="Changer de client"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={recherche}
+                  onChange={(e) => setRecherche(e.target.value)}
+                  placeholder="Rechercher un client par nom ou email…"
+                  className="w-full text-sm border border-slate-200 rounded-lg pl-8 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-secondary/40"
+                />
+                {(resultats.length > 0 || chargementClients) && (
+                  <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
+                    {chargementClients && (
+                      <p className="text-xs text-slate-400 px-3 py-2">Recherche…</p>
+                    )}
+                    {!chargementClients &&
+                      resultats.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => choisirClient(c)}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex flex-col"
+                        >
+                          <span className="text-slate-700">{c.full_name}</span>
+                          <span className="text-xs text-slate-400">{c.email}</span>
+                        </button>
+                      ))}
+                    {!chargementClients && resultats.length === 0 && (
+                      <p className="text-xs text-slate-400 px-3 py-2">Aucun client trouvé.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* champ caché contrôlé pour la validation zod */}
+            <Controller
+              name="clientId"
+              control={control}
+              defaultValue={undefined}
+              render={() => <input type="hidden" {...register('clientId', { valueAsNumber: true })} />}
+            />
+            {errors.clientId && (
+              <p className="text-xs text-danger mt-1">{errors.clientId.message}</p>
+            )}
+          </div>
+
           <div className="bg-white rounded-lg border border-slate-200 p-4">
             <label htmlFor="title" className="block text-sm font-medium text-slate-700 mb-1">
               Objet de la demande
@@ -243,15 +351,6 @@ function SupervisorNewTicketPage() {
               <span className="font-medium text-slate-800">Criticité automatique.</span> Le ticket est
               créé en priorité Moyenne puis reclassé par le module IA. Tu pourras l&apos;ajuster
               toi-même depuis « Criticité des tickets ».
-            </p>
-          </div>
-
-          <div className="flex gap-2.5 bg-amber-50 border border-amber-200 rounded-lg p-3">
-            <Info size={15} className="text-amber-600 shrink-0 mt-0.5" aria-hidden="true" />
-            <p className="text-[11px] text-amber-800 leading-snug">
-              <span className="font-medium">Demandeur enregistré : {nomSuperviseur}.</span> Le backend
-              associe le ticket à son auteur. La saisie « pour le compte d&apos;un client » nécessite
-              que le serializer accepte un <span className="font-mono">client_id</span>.
             </p>
           </div>
         </div>

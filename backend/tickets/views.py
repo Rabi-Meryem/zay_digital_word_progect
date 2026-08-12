@@ -19,8 +19,8 @@ from users.permissions import (
     IsAdminOrSupervisor, IsAgentOrSupervisor
 )
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
- 
- 
+
+
 # ─── Helper : récupérer un ticket ou renvoyer 404 ───────────────────────────
 def get_ticket_or_404(pk):
     try:
@@ -29,11 +29,11 @@ def get_ticket_or_404(pk):
         ).get(pk=pk)
     except Ticket.DoesNotExist:
         return None
- 
- 
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # GET  /api/tickets/  → liste des tickets (filtrée par rôle)
-# POST /api/tickets/  → créer un ticket (client seulement)
+# POST /api/tickets/  → créer un ticket (client, ou superviseur pour un client)
 # ─────────────────────────────────────────────────────────────────────────────
 class TicketListCreateView(APIView):
     """
@@ -42,14 +42,17 @@ class TicketListCreateView(APIView):
            - AGENT      → uniquement les tickets qui lui sont assignés
            - SUPERVISOR → tous les tickets
            - ADMIN      → tous les tickets
-    POST : Seul le client peut créer un ticket.
+    POST : Le client crée son propre ticket.
+           Le superviseur peut créer un ticket POUR UN CLIENT (client_id requis) —
+           le ticket n'est jamais créé au nom du superviseur.
     """
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+
     def get(self, request):
         user = request.user
         role = user.role.name
- 
+
         # Filtrage par rôle — chaque rôle voit ses propres données
         if role == 'CLIENT':
             queryset = Ticket.objects.filter(client=user)
@@ -59,11 +62,11 @@ class TicketListCreateView(APIView):
             queryset = Ticket.objects.all()
         else:
             queryset = Ticket.objects.none()
- 
+
         # Appliquer les filtres de l'URL
         ticket_filter = TicketFilter(request.GET, queryset=queryset)
         queryset      = ticket_filter.qs
- 
+
         # Tri : par défaut du plus récent au plus ancien
         ordering = request.GET.get('ordering', '-created_at')
         allowed_orderings = [
@@ -75,18 +78,18 @@ class TicketListCreateView(APIView):
             queryset = queryset.order_by(ordering)
         else:
             queryset = queryset.order_by('-created_at')
- 
+
         # Pagination simple
         page      = int(request.GET.get('page', 1))
         page_size = int(request.GET.get('page_size', 20))
         start     = (page - 1) * page_size
         end       = start + page_size
- 
+
         total     = queryset.count()
         page_data = queryset.select_related(
             'client', 'assigned_agent', 'sla_rule'
         )[start:end]
- 
+
         serializer = TicketListSerializer(page_data, many=True)
         return Response({
             'total':     total,
@@ -95,36 +98,59 @@ class TicketListCreateView(APIView):
             'pages':     (total + page_size - 1) // page_size,
             'results':   serializer.data,
         })
- 
+
     def post(self, request):
-        # Seul un client peut créer un ticket
+        # Seuls un client ou un superviseur peuvent créer un ticket
         if request.user.role.name not in ('CLIENT', 'SUPERVISOR'):
             return Response(
                 {'detail': "Seul un client peut créer un ticket."},
                 status=status.HTTP_403_FORBIDDEN
             )
- 
+
         serializer = TicketCreateSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(
                 serializer.errors,
                 status=status.HTTP_400_BAD_REQUEST
             )
- 
+
+        role = request.user.role.name
+
+        # ── Déterminer le VRAI client du ticket ──
+        # Un ticket appartient toujours à un CLIENT, jamais à un superviseur,
+        # même si c'est le superviseur qui remplit le formulaire.
+        if role == 'CLIENT':
+            client = request.user
+        else:  # SUPERVISOR
+            client_id = serializer.validated_data.get('client_id')
+            if not client_id:
+                return Response(
+                    {'detail': "Veuillez préciser le client (client_id) pour lequel vous créez ce ticket."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            try:
+                client = User.objects.get(pk=client_id, role__name='CLIENT')
+            except User.DoesNotExist:
+                return Response(
+                    {'detail': "Client introuvable."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
         # Déléguer la création au service
         try:
             ticket = ticket_service.create_ticket(
-                client      = request.user,
+                client      = client,
                 title       = serializer.validated_data['title'],
                 description = serializer.validated_data['description'],
-                source      = 'WEB',
+                source      = 'WEB' if role == 'CLIENT' else 'SUPERVISOR',
             )
         except Exception as e:
             return Response(
                 {'detail': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
- # ── Pièces jointes envoyées avec la création (champ "attachments") ──
+
+        # ── Pièces jointes envoyées avec la création (champ "attachments") ──
         files = request.FILES.getlist('attachments')
         rejected = []
         for f in files:
@@ -138,24 +164,15 @@ class TicketListCreateView(APIView):
             response_data['attachments_rejected'] = rejected
 
         return Response(response_data, status=status.HTTP_201_CREATED)
-        return Response(
-            TicketDetailSerializer(ticket).data,
-            status=status.HTTP_201_CREATED
-        )
- 
- 
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # GET   /api/tickets/<id>/  → détail du ticket
 # PATCH /api/tickets/<id>/  → changer le statut
 # ─────────────────────────────────────────────────────────────────────────────
 class TicketDetailView(APIView):
-    """
-    GET   : Voir le détail complet d'un ticket.
-            Chaque rôle ne peut voir que les tickets auxquels il a accès.
-    PATCH : Changer le statut (agent/superviseur uniquement).
-    """
     permission_classes = [IsAuthenticated]
- 
+
     def _check_access(self, ticket, user):
         """Vérifie que l'utilisateur a le droit de voir ce ticket."""
         role = user.role.name
@@ -164,7 +181,7 @@ class TicketDetailView(APIView):
         if role == 'AGENT':
             return ticket.assigned_agent == user
         return True  # SUPERVISOR et ADMIN voient tout
- 
+
     def get(self, request, pk):
         ticket = get_ticket_or_404(pk)
         if not ticket:
@@ -172,16 +189,16 @@ class TicketDetailView(APIView):
                 {'detail': 'Ticket introuvable.'},
                 status=status.HTTP_404_NOT_FOUND
             )
- 
+
         if not self._check_access(ticket, request.user):
             return Response(
                 {'detail': "Vous n'avez pas accès à ce ticket."},
                 status=status.HTTP_403_FORBIDDEN
             )
- 
+
         serializer = TicketDetailSerializer(ticket)
         return Response(serializer.data)
- 
+
     def patch(self, request, pk):
         # Seuls agent et superviseur peuvent changer le statut
         if request.user.role.name not in ('AGENT', 'SUPERVISOR', 'ADMIN'):
@@ -189,38 +206,37 @@ class TicketDetailView(APIView):
                 {'detail': "Vous n'êtes pas autorisé à modifier ce ticket."},
                 status=status.HTTP_403_FORBIDDEN
             )
- 
+
         ticket = get_ticket_or_404(pk)
         if not ticket:
             return Response(
                 {'detail': 'Ticket introuvable.'},
                 status=status.HTTP_404_NOT_FOUND
             )
- 
+
         serializer = TicketStatusUpdateSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(
                 serializer.errors,
                 status=status.HTTP_400_BAD_REQUEST
             )
- 
+
         ticket = ticket_service.change_status(
             ticket     = ticket,
             new_status = serializer.validated_data['current_status'],
             changed_by = request.user,
             reason     = serializer.validated_data.get('reason', ''),
         )
- 
+
         return Response(TicketDetailSerializer(ticket).data)
- 
- 
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # POST /api/tickets/<id>/assign/
-# Superviseur assigne le ticket à un agent
 # ─────────────────────────────────────────────────────────────────────────────
 class TicketAssignView(APIView):
     permission_classes = [IsAuthenticated, IsAdminOrSupervisor]
- 
+
     def post(self, request, pk):
         ticket = get_ticket_or_404(pk)
         if not ticket:
@@ -228,32 +244,30 @@ class TicketAssignView(APIView):
                 {'detail': 'Ticket introuvable.'},
                 status=status.HTTP_404_NOT_FOUND
             )
- 
+
         serializer = TicketAssignSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(
                 serializer.errors,
                 status=status.HTTP_400_BAD_REQUEST
             )
- 
+
         agent = User.objects.get(pk=serializer.validated_data['agent_id'])
- 
+
         ticket = ticket_service.assign_ticket(
             ticket      = ticket,
             agent       = agent,
             assigned_by = request.user,
+            note        = serializer.validated_data.get('note', ''),
         )
- 
+
         return Response(TicketDetailSerializer(ticket).data)
- 
- 
 # ─────────────────────────────────────────────────────────────────────────────
 # POST /api/tickets/<id>/take/
-# L'agent prend en charge le ticket (statut → IN_PROGRESS)
 # ─────────────────────────────────────────────────────────────────────────────
 class TicketTakeView(APIView):
     permission_classes = [IsAuthenticated, IsAgent]
- 
+
     def post(self, request, pk):
         ticket = get_ticket_or_404(pk)
         if not ticket:
@@ -261,36 +275,33 @@ class TicketTakeView(APIView):
                 {'detail': 'Ticket introuvable.'},
                 status=status.HTTP_404_NOT_FOUND
             )
- 
-        # Vérifier que ce ticket lui est bien assigné
+
         if ticket.assigned_agent != request.user:
             return Response(
                 {'detail': "Ce ticket ne vous est pas assigné."},
                 status=status.HTTP_403_FORBIDDEN
             )
- 
-        # Enregistrer la première réponse si pas encore faite
+
         if not ticket.first_response_at:
             ticket.first_response_at = timezone.now()
             ticket.save(update_fields=['first_response_at'])
- 
+
         ticket = ticket_service.change_status(
             ticket     = ticket,
             new_status = Ticket.Status.IN_PROGRESS,
             changed_by = request.user,
             reason     = "Prise en charge par l'agent",
         )
- 
+
         return Response(TicketDetailSerializer(ticket).data)
- 
- 
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # POST /api/tickets/<id>/resolve/
-# L'agent marque le ticket comme résolu
 # ─────────────────────────────────────────────────────────────────────────────
 class TicketResolveView(APIView):
     permission_classes = [IsAuthenticated, IsAgentOrSupervisor]
- 
+
     def post(self, request, pk):
         ticket = get_ticket_or_404(pk)
         if not ticket:
@@ -298,39 +309,33 @@ class TicketResolveView(APIView):
                 {'detail': 'Ticket introuvable.'},
                 status=status.HTTP_404_NOT_FOUND
             )
- 
-        # L'agent ne peut résoudre que ses propres tickets
+
         if request.user.role.name == 'AGENT' and ticket.assigned_agent != request.user:
             return Response(
                 {'detail': "Ce ticket ne vous est pas assigné."},
                 status=status.HTTP_403_FORBIDDEN
             )
- 
+
         if ticket.current_status == Ticket.Status.RESOLVED:
             return Response(
                 {'detail': "Ce ticket est déjà résolu."},
                 status=status.HTTP_400_BAD_REQUEST
             )
- 
+
         resolution_note = request.data.get('resolution_note', '')
- 
+
         ticket = ticket_service.change_status(
             ticket     = ticket,
             new_status = Ticket.Status.RESOLVED,
             changed_by = request.user,
             reason     = resolution_note or "Problème résolu par l'agent",
         )
- 
+
         return Response(TicketDetailSerializer(ticket).data)
- 
- 
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # POST /api/tickets/<id>/close/
-# Le superviseur clôture définitivement le ticket
-# ─────────────────────────────────────────────────────────────────────────────
-# ─────────────────────────────────────────────────────────────────────────────
-# POST /api/tickets/<id>/close/
-# Le client (ticket résolu) ou le superviseur/admin clôture définitivement le ticket
 # ─────────────────────────────────────────────────────────────────────────────
 class TicketCloseView(APIView):
     permission_classes = [IsAuthenticated]
@@ -371,13 +376,14 @@ class TicketCloseView(APIView):
         )
 
         return Response(TicketDetailSerializer(ticket).data)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # POST /api/tickets/<id>/reopen/
-# Le client rouvre un ticket qu'il juge mal résolu
 # ─────────────────────────────────────────────────────────────────────────────
 class TicketReopenView(APIView):
     permission_classes = [IsAuthenticated]
- 
+
     def post(self, request, pk):
         ticket = get_ticket_or_404(pk)
         if not ticket:
@@ -385,39 +391,37 @@ class TicketReopenView(APIView):
                 {'detail': 'Ticket introuvable.'},
                 status=status.HTTP_404_NOT_FOUND
             )
- 
-        # Seul le client propriétaire peut rouvrir
+
         if request.user.role.name == 'CLIENT' and ticket.client != request.user:
             return Response(
                 {'detail': "Ce ticket ne vous appartient pas."},
                 status=status.HTTP_403_FORBIDDEN
             )
- 
+
         if ticket.current_status not in [Ticket.Status.RESOLVED, Ticket.Status.CLOSED]:
             return Response(
                 {'detail': "Seul un ticket résolu ou clôturé peut être réouvert."},
                 status=status.HTTP_400_BAD_REQUEST
             )
- 
+
         reopen_reason = request.data.get('reason', 'Le problème n\'est pas résolu.')
- 
+
         ticket = ticket_service.change_status(
             ticket     = ticket,
             new_status = Ticket.Status.REOPENED,
             changed_by = request.user,
             reason     = reopen_reason,
         )
- 
+
         return Response(TicketDetailSerializer(ticket).data)
- 
- 
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # POST /api/tickets/<id>/escalate/
-# L'agent escalade le ticket vers le superviseur
 # ─────────────────────────────────────────────────────────────────────────────
 class TicketEscalateView(APIView):
     permission_classes = [IsAuthenticated, IsAgent]
- 
+
     def post(self, request, pk):
         ticket = get_ticket_or_404(pk)
         if not ticket:
@@ -425,20 +429,20 @@ class TicketEscalateView(APIView):
                 {'detail': 'Ticket introuvable.'},
                 status=status.HTTP_404_NOT_FOUND
             )
- 
+
         if ticket.assigned_agent != request.user:
             return Response(
                 {'detail': "Ce ticket ne vous est pas assigné."},
                 status=status.HTTP_403_FORBIDDEN
             )
- 
+
         serializer = TicketEscalateSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(
                 serializer.errors,
                 status=status.HTTP_400_BAD_REQUEST
             )
- 
+
         try:
             ticket_service.escalate_ticket(
                 ticket        = ticket,
@@ -451,19 +455,18 @@ class TicketEscalateView(APIView):
                 {'detail': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
- 
+
         return Response(
             TicketDetailSerializer(ticket).data
         )
- 
- 
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # POST /api/tickets/<id>/rate/
-# Le client évalue la résolution de son ticket (1 à 5 étoiles)
 # ─────────────────────────────────────────────────────────────────────────────
 class TicketRateView(APIView):
     permission_classes = [IsAuthenticated, IsClient]
- 
+
     def post(self, request, pk):
         ticket = get_ticket_or_404(pk)
         if not ticket:
@@ -471,14 +474,14 @@ class TicketRateView(APIView):
                 {'detail': 'Ticket introuvable.'},
                 status=status.HTTP_404_NOT_FOUND
             )
- 
+
         serializer = TicketRateSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(
                 serializer.errors,
                 status=status.HTTP_400_BAD_REQUEST
             )
- 
+
         try:
             rating = ticket_service.rate_ticket(
                 ticket  = ticket,
@@ -491,21 +494,20 @@ class TicketRateView(APIView):
                 {'detail': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
- 
+
         return Response({
             'detail':  'Évaluation enregistrée.',
             'rating':  rating.rating,
             'comment': rating.comment,
         })
- 
- 
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # GET /api/tickets/<id>/history/
-# Historique complet des changements de statut d'un ticket
 # ─────────────────────────────────────────────────────────────────────────────
 class TicketHistoryView(APIView):
     permission_classes = [IsAuthenticated]
- 
+
     def get(self, request, pk):
         ticket = get_ticket_or_404(pk)
         if not ticket:
@@ -513,11 +515,11 @@ class TicketHistoryView(APIView):
                 {'detail': 'Ticket introuvable.'},
                 status=status.HTTP_404_NOT_FOUND
             )
- 
+
         history = TicketStatusHistory.objects.filter(
             ticket=ticket
         ).select_related('changed_by').order_by('changed_at')
- 
+
         data = [
             {
                 'old_status': h.old_status,
@@ -528,15 +530,16 @@ class TicketHistoryView(APIView):
             }
             for h in history
         ]
- 
+
         return Response({
             'ticket_number': ticket.ticket_number,
             'count':         len(data),
             'history':       data,
         })
- # ─────────────────────────────────────────────────────────────────────────────
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # POST /api/tickets/<id>/set-priority/
-# Le superviseur définit la priorité ET assigne l'agent en même temps
 # ─────────────────────────────────────────────────────────────────────────────
 class TicketSetPriorityAndAssignView(APIView):
     permission_classes = [IsAuthenticated, IsAdminOrSupervisor]
@@ -552,7 +555,6 @@ class TicketSetPriorityAndAssignView(APIView):
         priority = request.data.get('priority')
         agent_id = request.data.get('agent_id')
 
-        # Valider la priorité
         allowed = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
         if not priority or priority not in allowed:
             return Response(
@@ -560,18 +562,20 @@ class TicketSetPriorityAndAssignView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Valider l'agent
-        try:
-            agent = User.objects.get(
-                pk=agent_id,
-                role__name='AGENT',
-                is_active=True
-            )
-        except User.DoesNotExist:
-            return Response(
-                {'detail': "Agent introuvable ou inactif."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        # L'agent est optionnel : on ne tente de le résoudre que s'il est fourni.
+        agent = None
+        if agent_id:
+            try:
+                agent = User.objects.get(
+                    pk=agent_id,
+                    role__name='AGENT',
+                    is_active=True
+                )
+            except User.DoesNotExist:
+                return Response(
+                    {'detail': "Agent introuvable ou inactif."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
         ticket = ticket_service.supervisor_set_priority_and_assign(
             ticket     = ticket,
@@ -585,19 +589,18 @@ class TicketSetPriorityAndAssignView(APIView):
 
 # ─────────────────────────────────────────────────────────────────────────────
 # POST /api/tickets/ai-auto-assign/
-# Cron job — traite les tickets sans priorité depuis +45 min
 # ─────────────────────────────────────────────────────────────────────────────
 class TicketAIAutoAssignView(APIView):
     permission_classes = []  # Sécurisé par le header secret
 
     def post(self, request):
-       # from django.conf import settings
-        #secret = request.headers.get('X-Cron-Secret', '')
-        #if secret != settings.INTERNAL_WEBHOOK_SECRET:
-         #   return Response(
-          #      {'detail': 'Non autorisé.'},
-           #     status=status.HTTP_403_FORBIDDEN
-            #)
+        # from django.conf import settings
+        # secret = request.headers.get('X-Cron-Secret', '')
+        # if secret != settings.INTERNAL_WEBHOOK_SECRET:
+        #     return Response(
+        #         {'detail': 'Non autorisé.'},
+        #         status=status.HTTP_403_FORBIDDEN
+        #     )
 
         deadline = timezone.now() - timezone.timedelta(minutes=45)
         pending_tickets = Ticket.objects.filter(
