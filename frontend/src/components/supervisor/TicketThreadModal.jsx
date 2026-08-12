@@ -73,6 +73,34 @@ function TicketThreadModal({ ticketId, onClose }) {
                 {ticket.description}
               </p>
             )}
+            
+            {ticket.rating && (
+              <div>
+                <p className="text-sm font-semibold text-slate-700 mb-2">Évaluation du client</p>
+                <div className="border border-slate-200 rounded-lg px-3 py-2.5">
+                  <div className="flex items-center gap-1 mb-1.5">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <span
+                        key={n}
+                        className={n <= ticket.rating.rating ? 'text-amber-400' : 'text-slate-200'}
+                      >
+                        ★
+                      </span>
+                    ))}
+                    <span className="text-xs font-medium text-slate-600 ml-1">
+                      {ticket.rating.rating}/5
+                    </span>
+                  </div>
+                  {ticket.rating.comment ? (
+                    <p className="text-xs text-slate-600 leading-relaxed italic">
+                      « {ticket.rating.comment} »
+                    </p>
+                  ) : (
+                    <p className="text-xs text-slate-400">Aucun commentaire laissé.</p>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div>
               <p className="text-sm font-semibold text-slate-700 mb-2">Historique des statuts</p>
