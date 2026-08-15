@@ -32,6 +32,23 @@ class Ticket(models.Model):
         HIGH = "HIGH", "Haute"
         MEDIUM = "MEDIUM", "Moyenne"
         LOW = "LOW", "Basse"
+    
+    class Module(models.TextChoices):
+        IMPORT_EXPORT   = "Import / Export de données",        "Import / Export de données"
+        API_INTEGRATION = "API & Intégrations",                "API & Intégrations"
+        SYNCHRONISATION = "Synchronisation",                   "Synchronisation"
+        AUTH_SSO        = "Authentification & SSO",            "Authentification & SSO"
+        UTILISATEURS    = "Gestion des utilisateurs & Droits", "Gestion des utilisateurs & Droits"
+        STOCKAGE        = "Stockage & Fichiers",               "Stockage & Fichiers"
+        BASE_DONNEES    = "Base de données",                   "Base de données"
+        SECURITE        = "Module de sécurité",                "Module de sécurité"
+        PAIEMENT        = "Paiement & Facturation",            "Paiement & Facturation"
+        RECHERCHE       = "Moteur de recherche",               "Moteur de recherche"
+        WORKFLOW        = "Moteur de workflow",                "Moteur de workflow"
+        REPORTING       = "Tableau de bord & Reporting",       "Tableau de bord & Reporting"
+        MOBILE          = "Application mobile",                "Application mobile"
+        INTERFACE       = "Interface utilisateur",             "Interface utilisateur"
+        NOTIFICATIONS   = "Notifications & E-mails",           "Notifications & E-mails"
 
     ticket_number = models.CharField(
         max_length=50,
@@ -99,6 +116,20 @@ class Ticket(models.Model):
         blank=True,
         null=True,
     )
+    module = models.CharField(
+        max_length=50,
+        choices=Module.choices,
+        blank=True,
+        null=True,
+    )
+
+    ai_source = models.CharField(max_length=40, blank=True, default="")
+
+    ai_justification = models.TextField(blank=True, default="")
+
+    ai_relecture_requise = models.BooleanField(default=False)
+
+    ai_seuil_calibre = models.BooleanField(default=False)
 
     sla_rule = models.ForeignKey(
         SLARule,
