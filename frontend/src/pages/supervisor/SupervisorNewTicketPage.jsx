@@ -17,6 +17,7 @@ import toast from 'react-hot-toast'
 import { ArrowLeft, Paperclip, X, Send, Sparkles, User as UserIcon, Search } from 'lucide-react'
 import { createTicket } from '../../api/tickets'
 import { searchClients } from '../../api/users'
+import { MODULES } from '../../utils/modules'
 
 const MAX_FICHIERS = 3
 const TAILLE_MAX_MO = 5
@@ -26,6 +27,9 @@ const ticketSchema = z.object({
     .string()
     .min(5, 'Le titre doit faire au moins 5 caractères.')
     .max(255, 'Le titre ne peut pas dépasser 255 caractères.'),
+  module: z
+    .string()
+    .min(1, 'Choisis le module concerné : il détermine l\'analyse automatique.'),
   description: z
     .string()
     .min(30, 'Décris le problème en 30 caractères minimum pour permettre une analyse fiable.'),
@@ -120,6 +124,7 @@ function SupervisorNewTicketPage() {
     try {
       const ticket = await createTicket({
         title: values.title,
+        module: values.module,
         description: values.description,
         clientId: values.clientId,
         files: fichiers,
@@ -246,6 +251,32 @@ function SupervisorNewTicketPage() {
             />
             {errors.title && <p className="text-xs text-danger mt-1">{errors.title.message}</p>}
           </div>
+          
+          {/* Module concerné */}
+          <div className="bg-white rounded-lg border border-slate-200 p-4">
+            <label htmlFor="module" className="block text-sm font-medium text-slate-700 mb-1">
+              Module concerné
+            </label>
+            <select
+              id="module"
+              defaultValue=""
+              {...register('module')}
+              className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-secondary/40"
+            >
+              <option value="" disabled>
+                Sélectionne la partie de l'application concernée
+              </option>
+              {MODULES.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+            {errors.module && (
+              <p className="text-xs text-danger mt-1">{errors.module.message}</p>
+            )}
+          </div>
+
 
           <div className="bg-white rounded-lg border border-slate-200 p-4">
             <label htmlFor="description" className="block text-sm font-medium text-slate-700 mb-1">

@@ -10,6 +10,9 @@ from escalation.models import Escalation
 from logs_app.models import AuditLog
 from users.models import User
 from notifications.services import notification_service
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class TicketService:
@@ -22,7 +25,7 @@ class TicketService:
     # CRÉER UN TICKET
     # ─────────────────────────────────────────────────────────────────────────
     @transaction.atomic
-    def create_ticket(self, client, title, description, source='WEB'):
+    def create_ticket(self, client, title, description, source='WEB', module=None):
         provisional_sla_rule = get_sla_rule(client.plan, Ticket.Priority.MEDIUM)
 
         if provisional_sla_rule is None:
@@ -35,6 +38,7 @@ class TicketService:
             client         = client,
             title          = title,
             description    = description,
+            module         = module,
             source         = source,
             priority       = None,
             sla_rule       = provisional_sla_rule,
@@ -47,8 +51,6 @@ class TicketService:
             sla_start = now,
             sla_end   = sla_deadline,
         )
-
-        self._call_ai_prediction(ticket)
 
         AuditLog.objects.create(
             user         = client,
@@ -380,52 +382,67 @@ class TicketService:
 
     @transaction.atomic
     def ai_auto_process(self, ticket):
-        import requests
-        import time
-        from django.conf import settings
+        """Classement automatique d'un ticket non traité par le superviseur."""
+        from ai.classification import classer_ticket
+        from ai.services import get_utilisateur_ia
 
-        predicted_priority = 'MEDIUM'
+        MAP_CRITICITE = {
+            'Critique': Ticket.Priority.CRITICAL,
+            'Haute':    Ticket.Priority.HIGH,
+            'Moyenne':  Ticket.Priority.MEDIUM,
+            'Basse':    Ticket.Priority.LOW,
+        }
+
+        predicted_priority = Ticket.Priority.MEDIUM
         confidence         = 0
+        resultat           = None
 
         try:
-            start    = time.time()
-            response = requests.post(
-                f"{settings.AI_SERVICE_URL}/predict/",
-                json={
-                    'title':       ticket.title,
-                    'description': ticket.description,
-                },
-                timeout=int(getattr(settings, 'AI_SERVICE_TIMEOUT_SECONDS', 5)),
+            resultat = classer_ticket(
+                ticket.title,
+                ticket.description,
+                ticket.module,
             )
-            elapsed = time.time() - start
-
-            if response.status_code == 200:
-                data               = response.json()
-                predicted_priority = data.get('priority', 'MEDIUM')
-                confidence         = data.get('confidence', 0)
-
+            predicted_priority = MAP_CRITICITE.get(
+                resultat['criticite'], Ticket.Priority.MEDIUM
+            )
+            # confiance_ml vaut entre 0 et 1 ; ai_confidence est un pourcentage.
+            confidence = round(resultat['confiance_ml'] * 100, 1)
         except Exception:
-            pass
+            logger.exception(
+                "Classification IA impossible pour %s", ticket.ticket_number
+            )
 
         sla_rule = get_sla_rule(ticket.client.plan, predicted_priority)
         if sla_rule is None:
-            sla_rule = SLARule.objects.filter(plan=ticket.client.plan, active=True).first()
-            predicted_priority = sla_rule.priority if sla_rule else 'MEDIUM'
+            sla_rule = SLARule.objects.filter(
+                plan=ticket.client.plan, active=True
+            ).first()
+            predicted_priority = sla_rule.priority if sla_rule else Ticket.Priority.MEDIUM
 
         now = timezone.now()
 
-        ticket.priority      = predicted_priority
-        ticket.ai_priority   = predicted_priority
-        ticket.ai_confidence = confidence
+        ticket.priority         = predicted_priority
+        ticket.ai_priority      = predicted_priority
+        ticket.ai_confidence    = confidence
         ticket.sla_warning_sent = False
-        ticket.sla_rule      = sla_rule
-        ticket.sla_deadline  = compute_sla_deadline(now, sla_rule)
+        ticket.sla_rule         = sla_rule
+        ticket.sla_deadline     = compute_sla_deadline(now, sla_rule)
+
+        if resultat is not None:
+            ticket.ai_source            = resultat['source']
+            ticket.ai_justification     = resultat['justification']
+            ticket.ai_relecture_requise = resultat['relecture_requise']
+            ticket.ai_seuil_calibre     = resultat['seuil_calibre']
+
         ticket.save()
 
+        # L'affectation est signée par l'utilisateur système : assigned_by et
+        # changed_by sont NOT NULL en base, et passer None annulerait toute la
+        # transaction — criticité comprise.
         agent = self._get_least_busy_agent()
-
         if agent:
-            self.assign_ticket(ticket, agent, assigned_by=None)
+            self.assign_ticket(ticket, agent, assigned_by=get_utilisateur_ia())
 
         AuditLog.objects.create(
             user         = None,
@@ -434,8 +451,10 @@ class TicketService:
             target_id    = str(ticket.id),
             description  = (
                 f"IA a traité automatiquement le ticket {ticket.ticket_number} "
-                f"(priorité : {predicted_priority}, confiance : {confidence}%) "
-                f"après 45 min sans action du superviseur"
+                f"(criticité : {predicted_priority}, "
+                f"source : {resultat['source'] if resultat else 'échec'}, "
+                f"confiance ML : {confidence} %) "
+                f"faute de classement par le superviseur"
             ),
         )
 

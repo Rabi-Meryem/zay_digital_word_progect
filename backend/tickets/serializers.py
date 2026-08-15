@@ -47,7 +47,7 @@ class TicketCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = Ticket
-        fields = ['title', 'description', 'client_id']
+        fields = ['title', 'description', 'client_id', 'module']
 
     def validate_title(self, value):
         """Le titre doit faire entre 5 et 255 caractères."""
@@ -85,7 +85,7 @@ class TicketListSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Ticket
         fields = [
-            'id', 'ticket_number', 'title',
+            'id', 'ticket_number', 'title','module',
             'current_status', 'priority', 'ai_priority',
             'source', 'client', 'assigned_agent',
             'sla_deadline', 'sla_remaining', 'sla_status',
@@ -136,7 +136,7 @@ class TicketDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Ticket
         fields = [
-            'id', 'ticket_number', 'title', 'description',
+            'id', 'ticket_number', 'title', 'description','module',
             'source', 'current_status', 'priority', 'ai_priority',
             'ai_confidence', 'client', 'assigned_agent', 'supervisor',
             'sla_deadline', 'sla_remaining', 'sla_status',
