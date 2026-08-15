@@ -138,7 +138,8 @@ class TicketDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'ticket_number', 'title', 'description','module',
             'source', 'current_status', 'priority', 'ai_priority',
-            'ai_confidence', 'client', 'assigned_agent', 'supervisor',
+            'ai_confidence', 'ai_source', 'ai_justification',
+            'ai_relecture_requise', 'ai_seuil_calibre','client', 'assigned_agent', 'supervisor',
             'sla_deadline', 'sla_remaining', 'sla_status',
             'is_sla_respected', 'reopened_count',
             'assigned_at', 'taken_in_charge_at',
