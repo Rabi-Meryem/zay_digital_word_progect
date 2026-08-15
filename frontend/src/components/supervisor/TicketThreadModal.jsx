@@ -73,6 +73,35 @@ function TicketThreadModal({ ticketId, onClose }) {
                 {ticket.description}
               </p>
             )}
+
+            {ticket.ai_source && (
+              <div>
+                <p className="text-sm font-semibold text-slate-700 mb-2">Criticité proposée par l'IA</p>
+                <div className="border border-indigo-200 bg-indigo-50 rounded-lg px-3 py-2.5">
+                  <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                    <span className="text-xs font-semibold text-indigo-900">
+                      {ticket.ai_priority}
+                    </span>
+                    <span className="text-[11px] text-indigo-600">
+                      décidé par {ticket.ai_source}
+                      {ticket.ai_confidence != null && ` — confiance ${ticket.ai_confidence} %`}
+                    </span>
+                    {ticket.ai_relecture_requise && (
+                      <span className="text-[11px] bg-amber-100 text-amber-800 rounded-full px-2 py-0.5 font-medium">
+                        Relecture conseillée
+                      </span>
+                    )}
+                  </div>
+                  {ticket.ai_justification ? (
+                    <p className="text-xs text-indigo-800 leading-relaxed italic">
+                      « {ticket.ai_justification} »
+                    </p>
+                  ) : (
+                    <p className="text-xs text-indigo-400">Aucune justification enregistrée.</p>
+                  )}
+                </div>
+              </div>
+            )}
             
             {ticket.rating && (
               <div>
