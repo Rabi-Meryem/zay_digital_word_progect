@@ -115,6 +115,7 @@ REST_FRAMEWORK = {
 }
  
 AI_SERVICE_URL = config('AI_SERVICE_URL', default='http://localhost:8001')
+AI_CLASSIFICATION_DELAY_MINUTES = config('AI_CLASSIFICATION_DELAY_MINUTES', default=45, cast=int)
  
 # -----------------------------------------------------------------------
 # Stockage S3 / MinIO — pièces jointes (ticket_attachments, message_attachments)

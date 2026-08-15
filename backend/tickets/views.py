@@ -142,6 +142,7 @@ class TicketListCreateView(APIView):
                 client      = client,
                 title       = serializer.validated_data['title'],
                 description = serializer.validated_data['description'],
+                module      = serializer.validated_data.get('module'),
                 source      = 'WEB' if role == 'CLIENT' else 'SUPERVISOR',
             )
         except Exception as e:
@@ -602,7 +603,10 @@ class TicketAIAutoAssignView(APIView):
         #         status=status.HTTP_403_FORBIDDEN
         #     )
 
-        deadline = timezone.now() - timezone.timedelta(minutes=45)
+        from django.conf import settings
+        delai = getattr(settings, 'AI_CLASSIFICATION_DELAY_MINUTES', 45)
+        deadline = timezone.now() - timezone.timedelta(minutes=delai)
+        
         pending_tickets = Ticket.objects.filter(
             current_status=Ticket.Status.OPEN,
             assigned_agent=None,
