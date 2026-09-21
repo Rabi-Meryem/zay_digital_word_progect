@@ -60,6 +60,8 @@ class IMAPPollView(APIView):
             tickets = imap_service.poll()
             return Response({'status': 'ok', 'tickets_created': tickets, 'count': len(tickets)})
         except Exception as e:
+            from notifications.services import notification_service
+            notification_service.notify_system_event('API_WEBHOOK_ERROR')
             return Response({'status': 'error', 'detail': str(e)}, status=500)
 
 

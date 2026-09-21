@@ -107,18 +107,23 @@ class TicketService:
             changed_at = now,
         )
 
-        # Notifications (modules 5.2.3 à 5.2.6)
-        # Client + agent + superviseur, sans l'auteur de l'action.
-        recipients = self._status_change_recipients(ticket, changed_by)
+               # Notifications (modules 5.2.3 à 5.2.6)
+        # Les destinataires changent selon l'événement :
+        #   RESOLVED -> client uniquement (+ demande d'évaluation)
+        #   CLOSED   -> client + agent (le superviseur n'a pas besoin d'être notifié)
+        #   REOPENED / changement générique -> client + agent + superviseur
         if new_status == Ticket.Status.RESOLVED:
+            recipients = self._status_change_recipients(ticket, changed_by, roles=('client',))
             notification_service.notify('TICKET_RESOLVED', ticket, recipients=recipients)
         elif new_status == Ticket.Status.CLOSED:
+            recipients = self._status_change_recipients(ticket, changed_by, roles=('client', 'agent'))
             notification_service.notify('TICKET_CLOSED', ticket, recipients=recipients)
         elif new_status == Ticket.Status.REOPENED:
+            recipients = self._status_change_recipients(ticket, changed_by, roles=('client', 'agent', 'supervisor'))
             notification_service.notify('TICKET_REOPENED', ticket, recipients=recipients)
         elif new_status not in (Ticket.Status.ASSIGNED, Ticket.Status.ESCALATED):
+            recipients = self._status_change_recipients(ticket, changed_by, roles=('client', 'agent', 'supervisor'))
             notification_service.notify('TICKET_STATUS_CHANGED', ticket, recipients=recipients)
-
         AuditLog.objects.create(
             user         = changed_by,
             action_type  = AuditLog.ActionType.UPDATE,
@@ -131,10 +136,14 @@ class TicketService:
         )
 
         return ticket
-
-    def _status_change_recipients(self, ticket, changed_by):
-        """Client + agent assigné + superviseur, sans l'auteur de l'action."""
-        candidates = [ticket.client, ticket.assigned_agent, ticket.supervisor]
+    def _status_change_recipients(self, ticket, changed_by, roles=('client', 'agent', 'supervisor')):
+        """Sous-ensemble choisi de (client, agent assigné, superviseur), sans l'auteur de l'action."""
+        role_to_user = {
+            'client': ticket.client,
+            'agent': ticket.assigned_agent,
+            'supervisor': ticket.supervisor,
+        }
+        candidates = [role_to_user[r] for r in roles]
         recipients = list({u.id: u for u in candidates if u is not None}.values())
         if changed_by is not None:
             recipients = [u for u in recipients if u.id != changed_by.id]
@@ -183,7 +192,9 @@ class TicketService:
             ),
         )
 
-        # Notifications (module 5.2.2)
+                # Notifications (module 5.2.2)
+        # Seul l'agent est notifié de son affectation — cet événement n'est pas
+        # dans la liste des notifications destinées au client.
         agent_message = f"Le ticket {ticket.ticket_number} vous a été assigné."
         if note:
             agent_message += f"\nNote du superviseur : {note}"
@@ -191,10 +202,6 @@ class TicketService:
         notification_service.notify(
             'TICKET_ASSIGNED', ticket, recipients=[agent],
             override_content=agent_message,
-        )
-        notification_service.notify(
-            'TICKET_ASSIGNED', ticket, recipients=[ticket.client],
-            override_content=f"Votre ticket {ticket.ticket_number} a été pris en charge.",
         )
         return ticket
 
@@ -236,14 +243,15 @@ class TicketService:
             ),
         )
 
-        # Notification (modules 5.4.3/5.4.4)
+               # Notification (modules 5.4.3/5.4.4)
+        # Agent + superviseur dans les deux cas — manuelle ou automatique.
+        recipients = [u for u in [ticket.assigned_agent, supervisor] if u]
         if escalation_type == 'MANUAL':
             notification_service.notify(
-                'ESCALATION_MANUAL', ticket, recipients=[supervisor],
+                'ESCALATION_MANUAL', ticket, recipients=recipients,
                 override_content=f"Ticket {ticket.ticket_number} escaladé : {reason}",
             )
         else:  # AUTO
-            recipients = [u for u in [ticket.assigned_agent, supervisor] if u]
             notification_service.notify(
                 'ESCALATION_AUTO', ticket, recipients=recipients,
                 override_content=f"Ticket {ticket.ticket_number} escaladé automatiquement (SLA dépassé) : {reason}",

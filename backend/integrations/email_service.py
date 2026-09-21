@@ -50,7 +50,10 @@ class EmailService:
                 description=f"Échec email à {to_email} : {str(e)}",
                 is_suspicious=False,
             )
+            # Import local pour éviter un import circulaire
+            # (notifications/services.py importe déjà email_service).
+            from notifications.services import notification_service
+            notification_service.notify_system_event('API_WEBHOOK_ERROR')
             raise e
-
 
 email_service = EmailService()

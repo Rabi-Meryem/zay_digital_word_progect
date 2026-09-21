@@ -50,6 +50,12 @@ def demarrer():
     if _scheduler is not None:
         return
 
+    from escalation.services import (
+    escalader_tickets_sla_depasse,
+    notifier_avertissement_sla,
+    notifier_tickets_critiques_non_traites,
+)
+
     _scheduler = BackgroundScheduler(timezone=str(timezone.get_current_timezone()))
     _scheduler.add_job(
         reprendre_tickets_non_classes,
@@ -59,6 +65,33 @@ def demarrer():
         replace_existing=True,
         max_instances=1,      # un seul passage à la fois : le LLM prend du temps
         coalesce=True,        # les passages manqués ne s'accumulent pas
+    )
+    _scheduler.add_job(
+        escalader_tickets_sla_depasse,
+        trigger='interval',
+        minutes=5,
+        id='escalade_auto_sla',
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    _scheduler.add_job(
+        notifier_avertissement_sla,
+        trigger='interval',
+        minutes=5,
+        id='alerte_sla_warning',
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    _scheduler.add_job(
+        notifier_tickets_critiques_non_traites,
+        trigger='interval',
+        minutes=5,
+        id='alerte_critique_non_traite',
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
     )
     _scheduler.start()
     print("========== PLANIFICATEUR IA DEMARRE (controle toutes les 5 min) ==========")
